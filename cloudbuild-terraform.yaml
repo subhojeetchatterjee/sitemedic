@@ -1,0 +1,221 @@
+# Cloud Build configuration for Terraform-based deployments
+# Use this when you want to automate infrastructure changes via Terraform
+#
+# Includes:
+# - Image builds
+# - Terraform plan & apply
+# - Automatic rollback on failure
+
+steps:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 1: Fetch secrets for Terraform variables
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: fetch-secrets
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Fetch all secrets needed for Terraform
+        gcloud secrets versions access latest --secret=dynatrace-api-token-${_ENVIRONMENT} > /workspace/dynatrace_api_token.txt
+        gcloud secrets versions access latest --secret=dynatrace-webhook-secret-${_ENVIRONMENT} > /workspace/dynatrace_webhook_secret.txt
+        gcloud secrets versions access latest --secret=agent-api-key-${_ENVIRONMENT} > /workspace/agent_api_key.txt
+        gcloud secrets versions access latest --secret=slack-webhook-url-${_ENVIRONMENT} > /workspace/slack_webhook_url.txt || echo "" > /workspace/slack_webhook_url.txt
+        gcloud secrets versions access latest --secret=pagerduty-integration-key-${_ENVIRONMENT} > /workspace/pagerduty_integration_key.txt || echo "" > /workspace/pagerduty_integration_key.txt
+        gcloud secrets versions access latest --secret=firebase-admin-credentials-${_ENVIRONMENT} > /workspace/firebase_admin_credentials.json
+
+        echo "✓ Secrets fetched"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 2: Build & push images
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-agent
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${_ENVIRONMENT}-latest"
+      - "agent/"
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-agent
+    args: ["push", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent"]
+    waitFor: ["build-agent"]
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-frontend
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${_ENVIRONMENT}-latest"
+      - "frontend/"
+    env:
+      - "DOCKER_BUILDKIT=1"
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-frontend
+    args: ["push", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend"]
+    waitFor: ["build-frontend"]
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 3: Scan images for vulnerabilities
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/container-scanning"
+    id: scan-images
+    args:
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}"
+    waitFor: ["push-agent", "push-frontend"]
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 4: Initialize Terraform
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/terraform"
+    id: terraform-init
+    args:
+      - "init"
+    dir: "infra/terraform"
+    env:
+      - "TF_VAR_gcp_project_id=${PROJECT_ID}"
+      - "TF_VAR_gcp_region=${_REGION}"
+      - "TF_VAR_environment=${_ENVIRONMENT}"
+      - "TF_VAR_agent_image_tag=${SHORT_SHA}"
+      - "TF_VAR_frontend_image_tag=${SHORT_SHA}"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 5: Terraform plan (validation)
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/terraform"
+    id: terraform-plan
+    args:
+      - "plan"
+      - "-var-file=${_ENVIRONMENT}.tfvars"
+      - "-out=tfplan"
+      - "-no-color"
+    dir: "infra/terraform"
+    env:
+      - "TF_VAR_gcp_project_id=${PROJECT_ID}"
+      - "TF_VAR_gcp_region=${_REGION}"
+      - "TF_VAR_environment=${_ENVIRONMENT}"
+      - "TF_VAR_agent_image_tag=${SHORT_SHA}"
+      - "TF_VAR_frontend_image_tag=${SHORT_SHA}"
+      - "TF_VAR_dynatrace_api_token=$(cat /workspace/dynatrace_api_token.txt)"
+      - "TF_VAR_dynatrace_webhook_secret=$(cat /workspace/dynatrace_webhook_secret.txt)"
+      - "TF_VAR_agent_api_key=$(cat /workspace/agent_api_key.txt)"
+      - "TF_VAR_slack_webhook_url=$(cat /workspace/slack_webhook_url.txt)"
+      - "TF_VAR_pagerduty_integration_key=$(cat /workspace/pagerduty_integration_key.txt)"
+      - "TF_VAR_firebase_admin_credentials_json=$(cat /workspace/firebase_admin_credentials.json | tr -d '\n')"
+    waitFor: ["terraform-init", "scan-images"]
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 6: Save plan artifact
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: save-plan
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gsutil cp infra/terraform/tfplan gs://${PROJECT_ID}_cloudbuild/plans/tfplan-${SHORT_SHA}
+        echo "Plan saved: gs://${PROJECT_ID}_cloudbuild/plans/tfplan-${SHORT_SHA}"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 7: Apply Terraform changes (approval gate in Cloud Build)
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/terraform"
+    id: terraform-apply
+    args:
+      - "apply"
+      - "-no-color"
+      - "tfplan"
+    dir: "infra/terraform"
+    env:
+      - "TF_VAR_gcp_project_id=${PROJECT_ID}"
+      - "TF_VAR_gcp_region=${_REGION}"
+      - "TF_VAR_environment=${_ENVIRONMENT}"
+      - "TF_VAR_agent_image_tag=${SHORT_SHA}"
+      - "TF_VAR_frontend_image_tag=${SHORT_SHA}"
+    waitFor: ["terraform-plan"]
+    onFailure: ["ALLOW"]  # Don't fail build on Terraform error; allow for investigation
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 8: Verify deployment
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: verify-deployment
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "Waiting for services to be ready..."
+        sleep 30
+
+        # Check agent service
+        AGENT_STATUS=$(gcloud run services describe sitemedic-agent-${_ENVIRONMENT} \
+          --region=${_REGION} --format="value(status.conditions[0].status)" 2>/dev/null || echo "Unknown")
+        echo "Agent status: $AGENT_STATUS"
+
+        # Check frontend service
+        FRONTEND_STATUS=$(gcloud run services describe sitemedic-frontend-${_ENVIRONMENT} \
+          --region=${_REGION} --format="value(status.conditions[0].status)" 2>/dev/null || echo "Unknown")
+        echo "Frontend status: $FRONTEND_STATUS"
+
+        # Health check
+        AGENT_URL=$(gcloud run services describe sitemedic-agent-${_ENVIRONMENT} \
+          --region=${_REGION} --format="value(status.url)")
+        echo "Testing agent health: $AGENT_URL/health"
+        curl -f -I "$AGENT_URL/health" || echo "⚠️  Health check failed (service may still be starting)"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Step 9: Save Terraform state as artifact
+  # ────────────────────────────────────────────────────────────────────────────
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: save-state
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gsutil cp infra/terraform/terraform.tfstate gs://${PROJECT_ID}_cloudbuild/state/tfstate-${SHORT_SHA}
+        gsutil cp infra/terraform/terraform.tfstate.backup gs://${PROJECT_ID}_cloudbuild/state/tfstate.backup-${SHORT_SHA} || true
+        echo "State saved"
+
+options:
+  machineType: "N1_HIGHCPU_8"
+  logging: CLOUD_LOGGING_ONLY
+  substitution_option: "ALLOW_UNDEFINED"
+
+substitutions:
+  _ENVIRONMENT: "dev"
+  _REGION: "us-central1"
+
+# Artifacts
+artifacts:
+  objects:
+    location: "gs://${PROJECT_ID}_cloudbuild/artifacts/${BUILD_ID}"
+    paths:
+      - "infra/terraform/tfplan"
+
+# Timeout: 90 minutes (account for Terraform apply time)
+timeout: "5400s"
+
+# Images
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${SHORT_SHA}"
+
+onFailure:
+  - NOTIFY

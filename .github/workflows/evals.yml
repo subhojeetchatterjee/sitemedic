@@ -1,0 +1,161 @@
+name: Eval Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Scenario suite to run (id, category, or 'all')"
+        required: false
+        default: "all"
+      pass_threshold:
+        description: "Minimum accuracy % to pass"
+        required: false
+        default: "70"
+
+env:
+  PYTHON_VERSION: "3.11"
+  # All sensitive values come from repository secrets
+  GCP_PROJECT_ID:         ${{ secrets.GCP_PROJECT_ID }}
+  VERTEX_AI_LOCATION:     ${{ vars.VERTEX_AI_LOCATION || 'us-central1' }}
+  AGENT_URL:              ${{ secrets.STAGING_AGENT_URL }}
+  AGENT_API_KEY:          ${{ secrets.STAGING_AGENT_API_KEY }}
+  DEMO_APP_URL:           ${{ secrets.STAGING_DEMO_APP_URL }}
+  DT_TENANT_URL:          ${{ secrets.DT_TENANT_URL }}
+  DT_API_TOKEN:           ${{ secrets.DT_API_TOKEN }}
+  DT_MCP_SERVER_URL:      ${{ secrets.STAGING_DT_MCP_SERVER_URL }}
+  PUBSUB_TOPIC:           ${{ secrets.STAGING_PUBSUB_TOPIC }}
+
+jobs:
+  evals:
+    name: Run Eval Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 90  # 10 scenarios × 5 min max + overhead
+
+    permissions:
+      contents: read
+      id-token: write       # for Workload Identity Federation
+      pull-requests: write  # for posting PR comments
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account:            ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install eval dependencies
+        run: pip install -r evals/requirements.txt
+
+      - name: Verify agent health
+        run: |
+          echo "Checking agent at $AGENT_URL …"
+          curl --fail --silent --max-time 10 "$AGENT_URL/health" | python3 -m json.tool
+        continue-on-error: true  # don't block — runner will surface the error
+
+      - name: Run eval suite
+        id: evals
+        run: |
+          SUITE="${{ github.event.inputs.suite || 'all' }}"
+          THRESHOLD="${{ github.event.inputs.pass_threshold || '70' }}"
+          python evals/runner.py \
+            --suite "$SUITE" \
+            --pass-threshold "$THRESHOLD" \
+            --output evals/results/latest.json
+        continue-on-error: true  # always generate report even on failure
+
+      - name: Find previous results for regression comparison
+        id: prev
+        run: |
+          # Look for the most recent non-latest result file
+          PREV=$(ls evals/results/*.json 2>/dev/null | grep -v latest | sort | tail -1)
+          echo "previous_file=${PREV}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Markdown report
+        id: report
+        run: |
+          PREV="${{ steps.prev.outputs.previous_file }}"
+          if [ -n "$PREV" ] && [ -f "$PREV" ]; then
+            python evals/report.py \
+              --results evals/results/latest.json \
+              --compare "$PREV" \
+              --output evals/results/report.md
+          else
+            python evals/report.py \
+              --results evals/results/latest.json \
+              --output evals/results/report.md
+          fi
+          cat evals/results/report.md
+
+      - name: Upload results artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: |
+            evals/results/latest.json
+            evals/results/report.md
+          retention-days: 90
+
+      - name: Post report as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('evals/results/report.md', 'utf8');
+            const resultsJson = JSON.parse(fs.readFileSync('evals/results/latest.json', 'utf8'));
+            const accuracy = resultsJson.accuracy_pct || 0;
+            const passed = resultsJson.passed || 0;
+            const total = resultsJson.runnable || 0;
+            const emoji = accuracy >= 70 ? '✅' : '❌';
+
+            const body = [
+              `## ${emoji} SiteMedic Eval Results — ${accuracy}% accuracy (${passed}/${total})`,
+              '',
+              '<details>',
+              '<summary>Full report</summary>',
+              '',
+              report,
+              '',
+              '</details>',
+            ].join('\n');
+
+            // Find and update an existing bot comment, or create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes('SiteMedic Eval Results')
+            );
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail the job if accuracy is below threshold
+        if: steps.evals.outcome == 'failure'
+        run: |
+          echo "Eval suite failed (accuracy below threshold or error)."
+          exit 1

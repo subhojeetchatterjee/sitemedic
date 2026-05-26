@@ -1,0 +1,31 @@
+# Development environment Terraform variables
+# Copy to dev.tfvars and fill in actual values
+
+gcp_project_id  = "your-gcp-project-dev"
+gcp_region      = "us-central1"
+environment     = "dev"
+
+# Dynatrace (dev tenant)
+dynatrace_api_token       = "dt0c01.XXXXXXXXXXXX"
+dynatrace_webhook_secret  = "your-webhook-signing-secret-dev"
+
+# SiteMedic agent
+agent_api_key = "your-agent-api-key-dev"
+
+# Firebase admin credentials
+firebase_admin_credentials_json = jsonencode({
+  type                    = "service_account"
+  project_id              = "your-gcp-project-dev"
+  private_key_id          = "..."
+  private_key             = "..."
+  client_email            = "firebase-adminsdk-xxxxx@your-gcp-project-dev.iam.gserviceaccount.com"
+  client_id               = "..."
+  auth_uri                = "https://accounts.google.com/o/oauth2/auth"
+  token_uri               = "https://oauth2.googleapis.com/token"
+  auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+})
+
+# Notifications (optional in dev)
+slack_webhook_url         = ""
+pagerduty_integration_key = ""
+google_chat_webhook_url   = ""

@@ -1,0 +1,201 @@
+{
+  "id": "latency_spike_001",
+  "display_name": "Latency Spike — api-gateway under load",
+  "category": "performance",
+  "duration_seconds": 420,
+  "description": "Traffic surge causing p99 latency on api-gateway to spike from 180ms to 4.8s. CPU utilization at 95%, request queue depth growing. More instances needed to absorb load.",
+  "expected_diagnosis_keywords": ["latency", "response time", "slow", "timeout", "CPU", "scale", "traffic", "load"],
+  "expected_action": "scale_service",
+  "captured_at": "2026-05-25T16:00:00Z",
+  "events": [
+    {"t": 0, "type": "traffic_surge", "description": "Inbound request rate increased 3x to 8,500 RPS"},
+    {"t": 60, "type": "cpu_saturation", "description": "CPU utilization hit 95% across all instances"},
+    {"t": 120, "type": "latency_breach", "description": "p99 latency exceeded 2s SLO threshold"},
+    {"t": 240, "type": "queue_backlog", "description": "Request queue depth: 1,200 waiting requests"},
+    {"t": 360, "type": "timeout_cascade", "description": "Downstream services beginning to timeout"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-24601",
+        "title": "Response time degradation on api-gateway",
+        "status": "OPEN",
+        "severityLevel": "PERFORMANCE",
+        "startTime": 1716652800000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+            "name": "api-gateway"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+          "name": "api-gateway"
+        }
+      }
+    ],
+    "get_problem_details:P-24601": {
+      "problemId": "P-24601",
+      "displayId": "P-24601",
+      "title": "Response time degradation on api-gateway",
+      "severityLevel": "PERFORMANCE",
+      "status": "OPEN",
+      "startTime": 1716652800000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+          "name": "api-gateway"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+        "name": "api-gateway"
+      },
+      "evidenceDetails": {
+        "totalCount": 4,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "p99 response time: 4,820ms — SLO breach (target: <2000ms)",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {
+              "metric": "dt.service.request.response_time",
+              "p50_ms": 420,
+              "p90_ms": 1850,
+              "p99_ms": 4820,
+              "slo_target_ms": 2000
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "CPU utilization: 95% (threshold: 80%)",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {"metric": "builtin:host.cpu.usage", "value": 95.1, "threshold": 80.0}
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Request rate: 8,540 RPS — 3x normal baseline of 2,800 RPS",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {"current_rps": 8540, "baseline_rps": 2800, "active_instances": 3, "max_concurrency_per_instance": 80}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Request queue depth growing: 1,200 pending requests",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {"queue_depth": 1200, "queue_drain_rate": 0}
+          }
+        ]
+      }
+    },
+    "query_metrics:response_time_p99": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-APIGW001"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-APIGW001"},
+              "timestamps": [
+                1716652200000, 1716652260000, 1716652320000, 1716652380000,
+                1716652440000, 1716652500000, 1716652560000, 1716652620000,
+                1716652680000, 1716652740000, 1716652800000, 1716652860000
+              ],
+              "values": [165, 172, 178, 182, 890, 1450, 2100, 2980, 3650, 4200, 4580, 4820]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:cpu_utilization": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.cpu.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-APIGW001"],
+              "timestamps": [
+                1716652200000, 1716652260000, 1716652320000, 1716652380000,
+                1716652440000, 1716652500000, 1716652560000, 1716652620000,
+                1716652680000, 1716652740000
+              ],
+              "values": [32.1, 35.4, 41.2, 67.8, 78.3, 85.1, 89.4, 92.6, 94.1, 95.1]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:request_rate": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.requestCount.total",
+          "data": [
+            {
+              "dimensions": ["SERVICE-APIGW001"],
+              "timestamps": [
+                1716652200000, 1716652260000, 1716652320000, 1716652380000,
+                1716652440000, 1716652500000, 1716652560000
+              ],
+              "values": [2840, 2950, 4120, 5890, 7200, 8100, 8540]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:api-gateway": [
+      {
+        "traceId": "lat001trace",
+        "spanId": "lat001span",
+        "serviceName": "api-gateway",
+        "operationName": "POST /api/v1/search",
+        "duration": 4750000,
+        "startTime": 1716652800000,
+        "status": "OK",
+        "tags": [
+          {"key": "http.status_code", "value": "200"},
+          {"key": "queue.wait_time_ms", "value": "3890"},
+          {"key": "cpu.throttled", "value": "true"},
+          {"key": "instance.id", "value": "api-gateway-instance-2"}
+        ],
+        "childSpans": [
+          {"operationName": "queue-wait", "duration": 3890000, "status": "OK"},
+          {"operationName": "handler-execute", "duration": 860000, "status": "OK"}
+        ]
+      },
+      {
+        "traceId": "lat002trace",
+        "spanId": "lat002span",
+        "serviceName": "api-gateway",
+        "operationName": "GET /api/v1/products",
+        "duration": 5120000,
+        "startTime": 1716652810000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "503"},
+          {"key": "error.message", "value": "upstream connect error or disconnect/reset before headers. retried and the latest reset reason: connection timeout"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-APIGW001",
+        "displayName": "api-gateway",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Go",
+          "cloudRunService": "api-gateway",
+          "currentInstances": 3,
+          "minInstances": 2,
+          "maxInstances": 20,
+          "cpuLimit": "2",
+          "memoryLimit": "2Gi",
+          "concurrency": 80
+        }
+      }
+    ]
+  }
+}

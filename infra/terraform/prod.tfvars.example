@@ -1,0 +1,43 @@
+# SiteMedic Production Deployment Variables
+# Copy to prod.tfvars and fill in actual values before deploying
+
+gcp_project_id = "your-project-id-prod"
+gcp_region     = "us-central1"
+environment    = "prod"
+
+# Secrets (keep .tfvars files out of git!)
+dynatrace_api_token             = "dt0c01.YOUR_API_TOKEN_HERE"
+dynatrace_webhook_secret        = "YOUR_WEBHOOK_SECRET"
+agent_api_key                   = "YOUR_AGENT_API_KEY"
+firebase_admin_credentials_json = "{...full credentials json...}"
+slack_webhook_url               = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+pagerduty_integration_key       = "YOUR_PAGERDUTY_KEY"
+google_chat_webhook_url         = "https://chat.googleapis.com/v1/spaces/XXXXX/messages"
+
+# Firestore
+firestore_backup_retention_days = 30
+
+# Cloud Run - Agent (higher resources for production)
+agent_image_tag      = "prod-v1.0.0"  # Use specific git tags, not 'latest'
+agent_cpu            = "2"
+agent_memory         = "2Gi"
+agent_min_instances  = 2
+agent_max_instances  = 20
+
+# Cloud Run - Frontend (higher resources for production)
+frontend_image_tag      = "prod-v1.0.0"
+frontend_cpu            = "1"
+frontend_memory         = "1Gi"
+frontend_min_instances  = 2
+frontend_max_instances  = 10
+
+# Custom domains (setup DNS CNAME → ghs.googlehosted.com after deployment)
+agent_domain    = "agent.sitemedic.example.com"
+frontend_domain = "dashboard.sitemedic.example.com"
+
+# Security
+enable_cloud_armor = true
+alert_channels     = ["projects/YOUR_PROJECT/notificationChannels/1234567890"]
+
+# Monitoring
+enable_monitoring = true

@@ -1,0 +1,27 @@
+id: scenario-009-traffic-surge
+name: "Traffic Surge — Saturation Under Load"
+category: resource
+description: >
+  The eval runner generates a burst of 100 concurrent requests per second against /checkout
+  for 30 seconds. Under low max-instance settings, Cloud Run starts throttling.
+  Expected: agent identifies elevated request count, increased latency from queuing,
+  and proposes scaling out (more instances), not rollback.
+timeout_seconds: 300
+setup:
+  - generate_traffic:
+      path: /checkout
+      requests_per_second: 100
+      duration_seconds: 30
+  - wait_seconds: 90
+expected_diagnosis:
+  root_cause_keywords: ["traffic", "load", "surge", "scale", "concurrency", "instances", "saturation", "queue"]
+  expected_action: "scale_service"
+  acceptable_actions: ["scale_service"]
+reference_diagnosis: >
+  Request throughput spiked to 100 RPS, overwhelming the current single-instance Cloud Run
+  configuration. The resulting queuing delay causes p99 latency to rise even though there
+  is no code change — this is a pure capacity issue. The correct response is to scale out
+  (increase min-instances or max-instances). Rolling back would do nothing because the
+  current code is not at fault — the service is simply undersized for this load level.
+teardown:
+  - reset

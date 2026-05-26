@@ -1,0 +1,84 @@
+# ── Secrets & credentials ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.json.key
+credentials.json
+service-account-key.json
+sitemedic-agent-key.json
+*-key.json
+*.pem
+*.p12
+
+# ── AI assistant context files (not project source) ─────────────────────────
+CLAUDE.md
+GEMINI.md
+.claude/
+
+# ── Docs folder ─────────────────────────────────────────────────────────────
+docs/
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log
+.next/
+out/
+dist/
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── Build / test artifacts ───────────────────────────────────────────────────
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+evals/results/
+*.log
+
+# ── Terraform ────────────────────────────────────────────────────────────────
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# ── Demo mode — raw recordings contain real telemetry; curated scenarios OK ──
+agent/demo_mode/recordings/raw/
+
+# ── Demo app build artifacts ─────────────────────────────────────────────────
+demo-app/dist/
+demo-app/.env

@@ -1,0 +1,105 @@
+# SiteMedic Staging Environment Configuration
+environment: staging
+description: "Staging environment for pre-production testing"
+
+# GCP Configuration
+gcp:
+  project_id: ${GCP_PROJECT_ID}
+  region: us-central1
+
+# Firestore Configuration
+firestore:
+  database: staging
+  emulator_host: null
+
+# Vertex AI / Gemini Configuration
+vertex_ai:
+  location: us-central1
+  model_version: gemini-2.5-pro
+  max_tokens: 4096
+  temperature: 0.5
+
+# Dynatrace Configuration
+dynatrace:
+  tenant_url: ${DT_TENANT_URL:}
+  api_token: ${DT_API_TOKEN:}
+  mcp_server_url: ${DT_MCP_SERVER_URL:}
+  webhook_secret: ${DT_WEBHOOK_SECRET:change-me}
+
+# Demo Mode (staging: disable fallback to catch real Dynatrace failures)
+demo_mode:
+  force_demo: ${SITEMEDIC_FORCE_DEMO:false}
+  disable_demo: ${SITEMEDIC_DISABLE_DEMO:false}
+  demo_public: false
+
+# Cloud Run Services
+cloud_run:
+  region: us-central1
+  demo_app_url: ${DEMO_APP_URL:https://sitemedic-demo-app-staging.run.app}
+  agent_url: ${AGENT_URL:https://sitemedic-agent-staging.run.app}
+
+# Detection Configuration
+detection:
+  polling_interval_seconds: 60  # Longer in staging than dev
+  webhook_enabled: true
+  fallback_polling_enabled: true
+
+# Prediction Configuration
+prediction:
+  enabled: true
+  interval_seconds: 300
+  ttl_minutes: 30
+
+# Remediation Configuration
+remediation:
+  dry_run_only: false  # Allow real execution for testing
+  auto_approve_threshold: 0.0  # Manual approval for all; staging is "dry-run" mode
+  require_explicit_confirmation: true
+  max_concurrent_remediations: 3
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  gemini_error_threshold: 10
+  gemini_success_threshold: 5
+  dynatrace_error_threshold: 10
+  dynatrace_success_threshold: 5
+  firestore_error_threshold: 10
+  firestore_success_threshold: 5
+
+# Cost Configuration
+cost:
+  track_enabled: true
+  alert_threshold_usd: 500  # Alert if exceeded in staging
+  budget_limit_usd: 1000
+
+# Correlation Configuration
+correlation:
+  enabled: true
+  temporal_window_minutes: 5
+  confidence_threshold: 0.70
+
+# Logging Configuration
+logging:
+  level: INFO
+  format: json
+  structured: true
+  include_pii: false
+
+# Feature Flags
+features:
+  evals_enabled: true
+  chaos_enabled: false  # Disabled in staging
+  predictions_enabled: true
+  correlation_enabled: true
+  dry_run_mode: false
+
+# Audit Configuration
+audit:
+  enabled: true
+  ttl_days: 90
+  log_to_cloud_logging: true
+
+# Demo App Configuration
+demo_app:
+  stable_revision: demo-app-staging-v1
+  buggy_revision: demo-app-staging-v2

@@ -1,0 +1,48 @@
+#!/bin/bash
+# Pre-commit hook to prevent secrets from being committed
+# Install: cp .githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check 1: Reject .env files
+if git diff --cached --name-only | grep -E '\.env($|\..*$)' | grep -v '\.env\.template\|\.env\.example'; then
+    echo "❌ Error: Attempting to commit .env file(s). These should never be committed."
+    echo "   Add .env files to .gitignore and use .env.template instead."
+    exit 1
+fi
+
+# Check 2: Reject Terraform .tfvars files (they contain secrets)
+if git diff --cached --name-only | grep -E '\.tfvars($)' | grep -v '\.example'; then
+    echo "❌ Error: Attempting to commit .tfvars file(s). These contain secrets."
+    echo "   Copy the .example file and fill in locally, don't commit to git."
+    exit 1
+fi
+
+# Check 3: Reject private keys and service account files
+if git diff --cached --name-only | grep -E '(key\.json|credentials\.json|private.*key|.*account.*\.json)'; then
+    echo "❌ Error: Attempting to commit credential/key files."
+    echo "   These must never be committed to version control."
+    exit 1
+fi
+
+# Check 4: Scan for common secret patterns in staged changes
+if git diff --cached | grep -iE '(api[_-]?key|secret|password|token|credential).*[:=]\s*[a-zA-Z0-9]{20,}' \
+    | grep -v '^+.*https://' | grep -v '^+.*http://'; then
+    echo "⚠️  Warning: Possible secrets detected in staged changes."
+    echo "   Review the output above and remove any actual secrets before committing."
+    echo "   (Use 'git diff --cached' to review, or 'git reset' to unstage)"
+
+    # Fail the commit to be safe
+    exit 1
+fi
+
+# Check 5: Reject .DS_Store and other OS files
+if git diff --cached --name-only | grep -E '(\.DS_Store|Thumbs\.db|\.env\.local)'; then
+    echo "❌ Error: Attempting to commit OS/local files."
+    exit 1
+fi
+
+echo "✅ Pre-commit checks passed"
+exit 0

@@ -1,0 +1,188 @@
+{
+  "id": "bad_deploy_rollback_001",
+  "display_name": "Bad Deployment — api-gateway rollback",
+  "category": "bad_deploy",
+  "duration_seconds": 360,
+  "description": "Deployment of v2.8.0 to api-gateway introduced a regression causing 42% HTTP 5xx error rate. Errors began immediately post-deploy at 14:05 UTC. Previous stable revision is v2.7.9.",
+  "expected_diagnosis_keywords": ["deploy", "deployment", "regression", "rollback", "revision", "error rate", "500"],
+  "expected_action": "rollback_revision",
+  "captured_at": "2026-05-25T14:05:00Z",
+  "events": [
+    {"t": 0, "type": "deploy_completed", "description": "api-gateway v2.8.0 deployed to Cloud Run"},
+    {"t": 120, "type": "error_spike", "description": "HTTP 5xx rate jumped from 0.2% to 42%"},
+    {"t": 180, "type": "alert_fired", "description": "Error rate SLO breach alert triggered"},
+    {"t": 240, "type": "impact_confirmed", "description": "5 downstream services reporting timeouts"},
+    {"t": 300, "type": "rollback_candidate", "description": "Previous revision v2.7.9 identified as stable"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-67890",
+        "title": "High error rate on api-gateway after deployment",
+        "status": "OPEN",
+        "severityLevel": "AVAILABILITY",
+        "startTime": 1716645900000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+            "name": "api-gateway"
+          },
+          {
+            "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+            "name": "order-service"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+          "name": "api-gateway"
+        }
+      }
+    ],
+    "get_problem_details:P-67890": {
+      "problemId": "P-67890",
+      "displayId": "P-67890",
+      "title": "High error rate on api-gateway after deployment",
+      "severityLevel": "AVAILABILITY",
+      "status": "OPEN",
+      "startTime": 1716645900000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+          "name": "api-gateway"
+        },
+        {
+          "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+          "name": "order-service"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-APIGW001", "type": "SERVICE"},
+        "name": "api-gateway"
+      },
+      "evidenceDetails": {
+        "totalCount": 4,
+        "details": [
+          {
+            "type": "EVENT",
+            "displayName": "Deployment event: api-gateway v2.8.0 deployed at 14:05:23 UTC",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {
+              "eventType": "CUSTOM_DEPLOYMENT",
+              "deploymentName": "api-gateway-v2.8.0",
+              "deployedVersion": "v2.8.0",
+              "previousVersion": "v2.7.9",
+              "cloudRunRevision": "api-gateway-00042-xkz"
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Error rate: 42.3% — SLO breach (threshold: 1%)",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 42.3, "threshold": 1.0}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "HTTP 5xx responses: 1,247 errors in last 5 minutes",
+            "entity": {"id": "SERVICE-APIGW001", "name": "api-gateway"},
+            "data": {"http_5xx_count": 1247, "window_minutes": 5, "status_codes": {"500": 892, "502": 234, "503": 121}}
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Downstream impact: order-service error rate 38%",
+            "entity": {"id": "SERVICE-ORDER004", "name": "order-service"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 38.1, "caused_by": "api-gateway"}
+          }
+        ]
+      }
+    },
+    "query_metrics:error_rate": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.errors.total.rate",
+          "data": [
+            {
+              "dimensions": ["SERVICE-APIGW001"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-APIGW001", "service.name": "api-gateway"},
+              "timestamps": [
+                1716645600000, 1716645660000, 1716645720000, 1716645780000,
+                1716645840000, 1716645900000, 1716645960000, 1716646020000,
+                1716646080000, 1716646140000
+              ],
+              "values": [0.2, 0.3, 0.2, 0.4, 0.3, 38.7, 41.2, 42.3, 42.1, 41.8]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:request_throughput": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.requestCount.total",
+          "data": [
+            {
+              "dimensions": ["SERVICE-APIGW001"],
+              "timestamps": [
+                1716645600000, 1716645660000, 1716645720000, 1716645780000,
+                1716645840000, 1716645900000, 1716645960000, 1716646020000
+              ],
+              "values": [2840, 2756, 2901, 2823, 2867, 2945, 2712, 2634]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:api-gateway": [
+      {
+        "traceId": "trace001aaa",
+        "spanId": "span001",
+        "serviceName": "api-gateway",
+        "operationName": "GET /api/v2/products",
+        "duration": 12500000,
+        "startTime": 1716646000000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "NullPointerException in ProductRouteHandler.java:142"},
+          {"key": "deployment.version", "value": "v2.8.0"},
+          {"key": "cloud_run.revision", "value": "api-gateway-00042-xkz"}
+        ],
+        "logs": [
+          {"timestamp": 1716646000100, "message": "java.lang.NullPointerException at com.sitemedic.gateway.ProductRouteHandler.handle(ProductRouteHandler.java:142)", "level": "ERROR"},
+          {"timestamp": 1716646000200, "message": "Caused by: missing required config key 'PRODUCT_CACHE_TTL' introduced in v2.8.0", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "trace002bbb",
+        "spanId": "span002",
+        "serviceName": "api-gateway",
+        "operationName": "POST /api/v2/orders",
+        "duration": 9200000,
+        "startTime": 1716645990000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "NullPointerException in OrderRouteHandler.java:89"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-APIGW001",
+        "displayName": "api-gateway",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Java",
+          "cloudRunService": "api-gateway",
+          "cloudRunRevision": "api-gateway-00042-xkz",
+          "previousStableRevision": "api-gateway-00041-pqr",
+          "deployedVersion": "v2.8.0",
+          "previousVersion": "v2.7.9"
+        }
+      }
+    ]
+  }
+}

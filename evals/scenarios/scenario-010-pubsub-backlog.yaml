@@ -1,0 +1,30 @@
+id: scenario-010-pubsub-backlog
+name: "Pub/Sub Backlog — Consumer Lag"
+category: infrastructure
+description: >
+  Flood a Pub/Sub topic at 50 messages/second with no consumer running.
+  The subscription backlog grows without bound. Tests whether the agent detects
+  Pub/Sub queue depth via Cloud Monitoring and proposes the correct remediation.
+  Requires PUBSUB_TOPIC env var pointing to a real topic.
+timeout_seconds: 300
+requires_env:
+  - PUBSUB_TOPIC
+setup:
+  - inject: pubsub
+    params:
+      topicName: "${PUBSUB_TOPIC}"
+      messagesPerSecond: 50
+  - wait_seconds: 120
+expected_diagnosis:
+  root_cause_keywords: ["pubsub", "backlog", "queue", "consumer", "lag", "undelivered", "subscription", "messages"]
+  expected_action: "purge_pubsub_subscription_backlog"
+  acceptable_actions: ["purge_pubsub_subscription_backlog", "seek_subscription_to_timestamp"]
+reference_diagnosis: >
+  The Pub/Sub subscription backlog is growing at 50 messages/second with no consumer
+  processing them. Cloud Monitoring shows num_undelivered_messages increasing linearly
+  and oldest_unacked_message_age growing. This is a consumer-lag incident, not a producer
+  or code issue. The correct remediation is to purge the backlog (if messages are safe to drop)
+  or seek to a recent timestamp (if messages must be preserved). Restarting or rolling back
+  the producer service would not address the missing consumer.
+teardown:
+  - reset

@@ -1,0 +1,178 @@
+{
+  "id": "high_memory",
+  "display_name": "High Memory — sitemedic-demo-app heap leak",
+  "category": "resource_exhaustion",
+  "duration_seconds": 480,
+  "description": "Memory utilization on sitemedic-demo-app climbing steadily from 68% to 93% over 40 minutes. Heap analysis shows unbounded growth in the HTTP response cache — a missing cache eviction policy causing OOM risk. Restarting the service will clear the in-memory cache immediately.",
+  "expected_diagnosis_keywords": ["memory", "heap", "OOM", "cache", "eviction", "leak", "restart"],
+  "expected_action": "restart_service",
+  "captured_at": "2026-05-25T05:19:15Z",
+  "events": [
+    {"t": 0, "type": "memory_threshold", "description": "Memory crossed 80% — alert pre-warning triggered"},
+    {"t": 120, "type": "heap_analysis", "description": "Heap dump shows response cache object count growing unboundedly"},
+    {"t": 240, "type": "gc_pressure", "description": "Full GC running every 90s with diminishing returns"},
+    {"t": 360, "type": "memory_critical", "description": "Memory at 93% — OOM imminent within 15 minutes"},
+    {"t": 420, "type": "p99_degraded", "description": "p99 response time at 2.8s due to GC pauses"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-REC-002",
+        "title": "High memory utilization on sitemedic-demo-app",
+        "status": "OPEN",
+        "severityLevel": "RESOURCE_CONTENTION",
+        "startTime": 1716618600000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-DEMOAPP004", "type": "SERVICE"},
+            "name": "sitemedic-demo-app"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-DEMOAPP004", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      }
+    ],
+    "get_problem_details:P-REC-002": {
+      "problemId": "P-REC-002",
+      "displayId": "P-REC-002",
+      "title": "High memory utilization on sitemedic-demo-app",
+      "severityLevel": "RESOURCE_CONTENTION",
+      "status": "OPEN",
+      "startTime": 1716618600000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-DEMOAPP004", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-DEMOAPP004", "type": "SERVICE"},
+        "name": "sitemedic-demo-app"
+      },
+      "evidenceDetails": {
+        "totalCount": 4,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "Heap memory utilization: 93.1% — critical (threshold: 85%)",
+            "entity": {"id": "SERVICE-DEMOAPP004", "name": "sitemedic-demo-app"},
+            "data": {"metric": "jvm.memory.heap.used", "value": 93.1, "threshold": 85.0}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "HTTP response cache growing unboundedly — 2.1M objects, no eviction policy",
+            "entity": {"id": "SERVICE-DEMOAPP004", "name": "sitemedic-demo-app"},
+            "data": {
+              "cache_name": "ResponseCache",
+              "object_count": 2100000,
+              "eviction_policy": "none",
+              "size_mb": 1840
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Full GC frequency: every 91s — normal baseline 30 min",
+            "entity": {"id": "SERVICE-DEMOAPP004", "name": "sitemedic-demo-app"},
+            "data": {"metric": "jvm.gc.full.frequency_s", "value": 91, "baseline": 1800}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Memory growth rate: +0.6% per minute — OOM in ~11 minutes",
+            "entity": {"id": "SERVICE-DEMOAPP004", "name": "sitemedic-demo-app"},
+            "data": {"growth_rate_per_min": 0.6, "current_percent": 93.1, "minutes_to_oom": 11}
+          }
+        ]
+      }
+    },
+    "query_metrics:memory_utilization": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.mem.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP004"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-DEMOAPP004"},
+              "timestamps": [
+                1716615600000, 1716615660000, 1716615720000, 1716615780000,
+                1716615840000, 1716615900000, 1716615960000, 1716616020000,
+                1716616080000, 1716616140000, 1716616200000, 1716616260000,
+                1716616320000, 1716616380000
+              ],
+              "values": [68.1, 69.4, 70.8, 72.3, 73.9, 75.4, 77.1, 79.3, 81.5, 83.7, 86.2, 88.9, 91.3, 93.1]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:gc_pause_duration": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "jvm:gc.pause.duration",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP004"],
+              "timestamps": [
+                1716615600000, 1716615660000, 1716615720000, 1716615780000,
+                1716615840000, 1716615900000, 1716615960000, 1716616020000
+              ],
+              "values": [0.08, 0.12, 0.28, 0.65, 1.12, 1.89, 2.45, 3.21]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:sitemedic-demo-app": [
+      {
+        "traceId": "trace-mem-001",
+        "spanId": "span-mem-001",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "GET /api/feed",
+        "duration": 2780000,
+        "startTime": 1716616200000,
+        "status": "OK",
+        "tags": [
+          {"key": "http.status_code", "value": "200"},
+          {"key": "jvm.memory.heap.used.percent", "value": "91.3"},
+          {"key": "jvm.gc.recent_pause_ms", "value": "2450"}
+        ],
+        "logs": [
+          {"timestamp": 1716616200100, "message": "Full GC pause completed: 2450ms — heap freed 7.2% but re-filled within 60s", "level": "WARN"},
+          {"timestamp": 1716616200200, "message": "ResponseCache size: 2,100,000 entries — exceeds safe threshold of 500,000", "level": "WARN"}
+        ]
+      },
+      {
+        "traceId": "trace-mem-002",
+        "spanId": "span-mem-002",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "POST /api/analytics",
+        "duration": 3100000,
+        "startTime": 1716616210000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "java.lang.OutOfMemoryError: Java heap space (allocation failure)"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-DEMOAPP004",
+        "displayName": "sitemedic-demo-app",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Java",
+          "cloudRunService": "sitemedic-demo-app",
+          "cloudRunRevision": "sitemedic-demo-app-00016-jkl",
+          "instances": 2,
+          "containerized": true
+        }
+      }
+    ]
+  }
+}

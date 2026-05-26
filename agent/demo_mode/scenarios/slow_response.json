@@ -1,0 +1,194 @@
+{
+  "id": "slow_response",
+  "display_name": "Slow Response — sitemedic-demo-app DB query regression",
+  "category": "performance",
+  "duration_seconds": 420,
+  "description": "p99 response time on sitemedic-demo-app spiked from 190ms to 8.2s after a missing database index was introduced by a schema migration. A full table scan is now occurring on every /api/search request. Scaling out will distribute load and reduce per-instance pressure while the index is added permanently.",
+  "expected_diagnosis_keywords": ["slow", "latency", "response time", "database", "query", "index", "p99", "scale"],
+  "expected_action": "scale_service",
+  "captured_at": "2026-05-25T05:19:15Z",
+  "events": [
+    {"t": 0, "type": "latency_spike", "description": "p99 latency crossed 2s after schema migration at 05:17 UTC"},
+    {"t": 60, "type": "db_slow_query", "description": "Full table scan detected on 'events' table — missing index post-migration"},
+    {"t": 150, "type": "slo_breach", "description": "p99 latency at 5.8s — SLO breach (target: 1s)"},
+    {"t": 240, "type": "queue_depth", "description": "Request queue depth at 340 — insufficient instances"},
+    {"t": 360, "type": "user_impact", "description": "Frontend timeout errors visible to end users"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-REC-003",
+        "title": "Slow response time on sitemedic-demo-app",
+        "status": "OPEN",
+        "severityLevel": "PERFORMANCE",
+        "startTime": 1716617940000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-DEMOAPP005", "type": "SERVICE"},
+            "name": "sitemedic-demo-app"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-DEMOAPP005", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      }
+    ],
+    "get_problem_details:P-REC-003": {
+      "problemId": "P-REC-003",
+      "displayId": "P-REC-003",
+      "title": "Slow response time on sitemedic-demo-app",
+      "severityLevel": "PERFORMANCE",
+      "status": "OPEN",
+      "startTime": 1716617940000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-DEMOAPP005", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-DEMOAPP005", "type": "SERVICE"},
+        "name": "sitemedic-demo-app"
+      },
+      "evidenceDetails": {
+        "totalCount": 4,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "Response time p99: 8,240ms — SLO breach (target: 1,000ms)",
+            "entity": {"id": "SERVICE-DEMOAPP005", "name": "sitemedic-demo-app"},
+            "data": {"metric": "builtin:service.response.time", "value": 8240, "unit": "ms", "slo_target_ms": 1000}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "DB slow query: SELECT on 'events' table — full table scan, 18.4M rows",
+            "entity": {"id": "SERVICE-DEMOAPP005", "name": "sitemedic-demo-app"},
+            "data": {
+              "table": "events",
+              "query_type": "SELECT",
+              "scan_type": "FULL_TABLE_SCAN",
+              "rows_examined": 18400000,
+              "avg_duration_ms": 7800,
+              "missing_index": "events.user_id"
+            }
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Schema migration ran at 05:17 UTC — dropped index events.user_id",
+            "entity": {"id": "SERVICE-DEMOAPP005", "name": "sitemedic-demo-app"},
+            "data": {
+              "migration_id": "V42__update_events_schema.sql",
+              "timestamp": 1716617820000,
+              "dropped_index": "idx_events_user_id",
+              "impact": "Full table scans on all user-specific queries"
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Current instances: 2 (min) — request queue depth: 340",
+            "entity": {"id": "SERVICE-DEMOAPP005", "name": "sitemedic-demo-app"},
+            "data": {"current_instances": 2, "min_instances": 2, "queue_depth": 340, "recommended_instances": 6}
+          }
+        ]
+      }
+    },
+    "query_metrics:response_time": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP005"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-DEMOAPP005"},
+              "timestamps": [
+                1716617820000, 1716617880000, 1716617940000, 1716618000000,
+                1716618060000, 1716618120000, 1716618180000, 1716618240000,
+                1716618300000, 1716618360000
+              ],
+              "values": [190, 198, 2100, 4340, 5780, 6890, 7350, 7890, 8100, 8240]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:request_throughput": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.requestCount.total",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP005"],
+              "timestamps": [
+                1716617820000, 1716617880000, 1716617940000, 1716618000000,
+                1716618060000, 1716618120000
+              ],
+              "values": [1850, 1890, 1720, 1540, 1380, 1210]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:sitemedic-demo-app": [
+      {
+        "traceId": "trace-slow-001",
+        "spanId": "span-slow-001",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "GET /api/search",
+        "duration": 8180000,
+        "startTime": 1716618200000,
+        "status": "OK",
+        "tags": [
+          {"key": "http.status_code", "value": "200"},
+          {"key": "db.query.duration_ms", "value": "7842"},
+          {"key": "db.rows_examined", "value": "18400000"},
+          {"key": "db.index_used", "value": "none (full scan)"}
+        ],
+        "spans": [
+          {
+            "operation": "db.query events",
+            "duration_ms": 7842,
+            "tags": {"db.statement": "SELECT * FROM events WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", "db.rows_examined": 18400000, "db.index_used": "none"}
+          }
+        ],
+        "logs": [
+          {"timestamp": 1716618200050, "message": "Slow query detected: SELECT events WHERE user_id — full scan on 18.4M rows (7842ms)", "level": "WARN"},
+          {"timestamp": 1716618200100, "message": "Missing index: events.user_id was dropped in migration V42", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "trace-slow-002",
+        "spanId": "span-slow-002",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "GET /api/user/history",
+        "duration": 9200000,
+        "startTime": 1716618190000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "504"},
+          {"key": "error.message", "value": "Gateway timeout after 9000ms — database query not returning"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-DEMOAPP005",
+        "displayName": "sitemedic-demo-app",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Node.js",
+          "cloudRunService": "sitemedic-demo-app",
+          "cloudRunRevision": "sitemedic-demo-app-00020-mno",
+          "instances": 2,
+          "min_instances": 2,
+          "max_instances": 10,
+          "containerized": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PRINCIPLE: Default deny. Explicit allow only for specific paths and actors.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOperator() {
+      return isAuthenticated() &&
+             'operator' in request.auth.token &&
+             request.auth.token.operator == true;
+    }
+
+    function isAgentServiceAccount() {
+      return request.auth != null &&
+             request.auth.uid != null &&
+             request.auth.uid.startsWith('sitemedic-agent-');
+    }
+
+    // Public demo — allow unauthenticated reads so the dashboard works without login.
+    // Writes are still server-only (agent service account).
+    function isPublicRead() {
+      return true;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Incidents: Public read (demo), agent writes
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /incidents/{incidentId} {
+      allow read: if isPublicRead();
+      allow create, update, delete: if isAgentServiceAccount();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Predictions: Public read (demo), agent writes
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /predictions/{predictionId} {
+      allow read: if isPublicRead();
+      allow create, update, delete: if isAgentServiceAccount();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Incident Clusters: Public read (demo), agent writes
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /incident_clusters/{clusterId} {
+      allow read: if isPublicRead();
+      allow create, update, delete: if isAgentServiceAccount();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Audit Events: Immutable server-only writes
+    // – No client-side reads or writes
+    // – Only server can write (Cloud Functions, agent service account)
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /audit_events/{eventId} {
+      // No client-side read access (operators use API endpoint instead)
+      allow read: if false;
+
+      // Server-only writes (via backend service account with specific permissions)
+      allow create: if isAgentServiceAccount();
+
+      // No updates or deletes to audit trail (immutable)
+      allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Analytics Snapshots: Operators read, agent writes
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /analytics_snapshots/{window} {
+      allow read: if isPublicRead();
+      allow create, update: if isAgentServiceAccount();
+      allow delete: if false;  // Never delete historical snapshots
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Webhook Health: Agent writes, operators read
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /webhook_health/{probeId} {
+      allow read: if isPublicRead();
+      allow create, update: if isAgentServiceAccount();
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Internal collections (not exposed to clients)
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /webhook_failures/{failureId} {
+      allow read, create, update: if isAgentServiceAccount();
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Deny everything else (default deny)
+    // ─────────────────────────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

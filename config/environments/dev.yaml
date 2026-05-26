@@ -1,0 +1,99 @@
+# SiteMedic Development Environment Configuration
+environment: dev
+description: "Local development environment"
+
+# GCP Configuration
+gcp:
+  project_id: ${GCP_PROJECT_ID}
+  region: us-central1
+
+# Firestore Configuration
+firestore:
+  database: "(default)"
+  emulator_host: null  # Set to 127.0.0.1:8080 to use local emulator
+
+# Vertex AI / Gemini Configuration
+vertex_ai:
+  location: us-central1
+  model_version: gemini-2.5-pro
+  max_tokens: 4096
+  temperature: 0.7
+
+# Dynatrace Configuration
+dynatrace:
+  tenant_url: ${DT_TENANT_URL}
+  api_token: ${DT_API_TOKEN}
+  mcp_server_url: ${DT_MCP_SERVER_URL:http://localhost:3001}
+  webhook_secret: ${DT_WEBHOOK_SECRET}
+
+# Cloud Run Services
+cloud_run:
+  region: us-central1
+  demo_app_url: http://localhost:3000
+  agent_url: http://localhost:8080
+
+# Detection Configuration
+detection:
+  polling_interval_seconds: 30  # Fast in dev for quick feedback
+  webhook_enabled: true
+  fallback_polling_enabled: true
+
+# Prediction Configuration
+prediction:
+  enabled: true
+  interval_seconds: 300
+  ttl_minutes: 30
+
+# Remediation Configuration
+remediation:
+  dry_run_only: false  # Allow real execution in dev for testing
+  auto_approve_threshold: 0.0  # Manual approval for all in dev
+  require_explicit_confirmation: true
+  max_concurrent_remediations: 5
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  gemini_error_threshold: 10
+  gemini_success_threshold: 5
+  dynatrace_error_threshold: 10
+  dynatrace_success_threshold: 5
+  firestore_error_threshold: 10
+  firestore_success_threshold: 5
+
+# Cost Configuration
+cost:
+  track_enabled: true
+  alert_threshold_usd: 1000000  # Very high in dev (almost never alert)
+  budget_limit_usd: null
+
+# Correlation Configuration
+correlation:
+  enabled: true
+  temporal_window_minutes: 5
+  confidence_threshold: 0.70
+
+# Logging Configuration
+logging:
+  level: DEBUG
+  format: json
+  structured: true
+  include_pii: false
+
+# Feature Flags
+features:
+  evals_enabled: true
+  chaos_enabled: true
+  predictions_enabled: true
+  correlation_enabled: true
+  dry_run_mode: false
+
+# Audit Configuration
+audit:
+  enabled: true
+  ttl_days: 30
+  log_to_cloud_logging: true
+
+# Demo App Configuration (for local testing)
+demo_app:
+  stable_revision: demo-app-v1-stable
+  buggy_revision: demo-app-v2-buggy

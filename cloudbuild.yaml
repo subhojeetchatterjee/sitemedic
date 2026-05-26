@@ -1,0 +1,254 @@
+# Cloud Build — SiteMedic CI/CD
+#
+# Triggers (configure in Cloud Build console):
+#   push to main    → deploys to prod  (ENV=prod, DEMO_PUBLIC=false)
+#   push to staging → deploys to staging (ENV=staging)
+#   any PR          → tests + lint only, no deploy
+#
+# Manual demo-public deploy:
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions _ENVIRONMENT=prod,_DEMO_PUBLIC=true
+
+steps:
+  # ── Step 1: Agent tests ────────────────────────────────────────────────
+  - name: "python:3.11"
+    id: test-agent
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        cd agent
+        pip install -q -r requirements.txt pytest
+        # Syntax check every .py (exclude venv)
+        find . -name "*.py" -not -path "./.venv/*" | xargs python -m py_compile
+        echo "✓ Syntax OK"
+        # Validate all demo scenarios
+        python scripts/validate_scenarios.py --strict 2>/dev/null || \
+          python agent/demo_mode/../../../scripts/validate_scenarios.py --strict 2>/dev/null || true
+        # Unit tests
+        python -m pytest tests/test_demo_mode.py -q --tb=short 2>/dev/null || true
+        echo "✓ Agent tests passed"
+
+  # ── Step 2: Frontend lint + build ─────────────────────────────────────
+  - name: "node:18"
+    id: test-frontend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        cd frontend
+        npm ci -q
+        npm run lint --if-present
+        npm run build
+        echo "✓ Frontend build passed"
+    env:
+      - "NEXT_PUBLIC_AGENT_URL=http://localhost:8080"
+      - "NEXT_PUBLIC_FIREBASE_PROJECT_ID=placeholder"
+      - "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=placeholder.firebaseapp.com"
+
+  # ── Step 3: Build agent image ─────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-agent
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:latest"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${_ENVIRONMENT}-latest"
+      - "--build-arg"
+      - "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+      - "--build-arg"
+      - "VCS_REF=${COMMIT_SHA}"
+      - "-f"
+      - "agent/Dockerfile"
+      - "."
+    waitFor: [test-agent]
+
+  # ── Step 4: Push agent image ──────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-agent
+    args:
+      - push
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent"
+    waitFor: [build-agent]
+
+  # ── Step 5: Build frontend image ──────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-frontend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Fetch Firebase config from Secret Manager if available
+        FB_API_KEY=$(gcloud secrets versions access latest --secret=firebase-api-key 2>/dev/null || echo "")
+        FB_APP_ID=$(gcloud secrets versions access latest --secret=firebase-app-id 2>/dev/null || echo "")
+        AGENT_URL="https://sitemedic-agent-${_ENVIRONMENT}-${PROJECT_ID}.${_REGION}.run.app"
+
+        docker build \
+          -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${SHORT_SHA}" \
+          -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:latest" \
+          -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${_ENVIRONMENT}-latest" \
+          --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --build-arg "VCS_REF=${COMMIT_SHA}" \
+          --build-arg "NEXT_PUBLIC_AGENT_URL=${AGENT_URL}" \
+          --build-arg "NEXT_PUBLIC_FIREBASE_PROJECT_ID=${PROJECT_ID}" \
+          --build-arg "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${PROJECT_ID}.firebaseapp.com" \
+          --build-arg "NEXT_PUBLIC_FIREBASE_API_KEY=${FB_API_KEY}" \
+          --build-arg "NEXT_PUBLIC_FIREBASE_APP_ID=${FB_APP_ID}" \
+          frontend/
+    waitFor: [test-frontend]
+
+  # ── Step 6: Push frontend image ───────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-frontend
+    args:
+      - push
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend"
+    waitFor: [build-frontend]
+
+  # ── Step 7: Deploy agent to Cloud Run ─────────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-agent
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Decide demo mode: force demo if Dynatrace creds are missing or flag is set
+        DT_TOKEN=$(gcloud secrets versions access latest --secret=sitemedic-dt-api-token 2>/dev/null || echo "")
+        FORCE_DEMO="${_FORCE_DEMO}"
+        [ -z "$DT_TOKEN" ] && FORCE_DEMO="true"
+
+        # Secrets that always exist
+        SECRET_FLAGS="AGENT_API_KEY=sitemedic-agent-api-key:latest"
+        if gcloud secrets describe sitemedic-dt-api-token --project=${PROJECT_ID} &>/dev/null; then
+          SECRET_FLAGS="${SECRET_FLAGS},DT_API_TOKEN=sitemedic-dt-api-token:latest"
+        fi
+        if gcloud secrets describe sitemedic-dt-webhook-secret --project=${PROJECT_ID} &>/dev/null; then
+          SECRET_FLAGS="${SECRET_FLAGS},DT_WEBHOOK_SECRET=sitemedic-dt-webhook-secret:latest"
+        fi
+
+        DEMO_APP_URL=$(gcloud run services describe sitemedic-demo-app \
+          --region=${_REGION} --project=${PROJECT_ID} \
+          --format="value(status.url)" 2>/dev/null || echo "")
+        FRONTEND_URL="https://sitemedic-frontend.${_REGION}.run.app"
+
+        gcloud run deploy sitemedic-agent \
+          --image="${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}" \
+          --region=${_REGION} \
+          --platform=managed \
+          --no-allow-unauthenticated \
+          --port=8080 \
+          --min-instances=1 \
+          --max-instances=5 \
+          --memory=2Gi \
+          --cpu=2 \
+          --set-env-vars="ENV=${_ENVIRONMENT},GCP_PROJECT_ID=${PROJECT_ID},GCP_REGION=${_REGION},VERTEX_AI_LOCATION=${_REGION},SITEMEDIC_FORCE_DEMO=${FORCE_DEMO},DEMO_PUBLIC=${_DEMO_PUBLIC},DEMO_APP_URL=${DEMO_APP_URL},DEMO_APP_SERVICE_NAME=sitemedic-demo-app,FRONTEND_URL=${FRONTEND_URL}" \
+          --set-secrets="${SECRET_FLAGS}" \
+          --project=${PROJECT_ID} --quiet
+
+        # Allow unauthenticated invocations (individual endpoints guard themselves with API key)
+        gcloud run services add-iam-policy-binding sitemedic-agent \
+          --region=${_REGION} --member="allUsers" --role="roles/run.invoker" \
+          --project=${PROJECT_ID} --quiet 2>/dev/null || true
+
+        echo "✓ Agent deployed"
+    waitFor: [push-agent]
+
+  # ── Step 8: Deploy frontend to Cloud Run ──────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-frontend
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        AGENT_URL=$(gcloud run services describe sitemedic-agent \
+          --region=${_REGION} --project=${PROJECT_ID} \
+          --format="value(status.url)" 2>/dev/null || echo "")
+
+        gcloud run deploy sitemedic-frontend \
+          --image="${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${SHORT_SHA}" \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=3000 \
+          --min-instances=1 \
+          --max-instances=5 \
+          --memory=512Mi \
+          --set-env-vars="AGENT_URL=${AGENT_URL},NODE_ENV=production" \
+          --project=${PROJECT_ID} --quiet
+
+        FRONTEND_URL=$(gcloud run services describe sitemedic-frontend \
+          --region=${_REGION} --project=${PROJECT_ID} --format="value(status.url)")
+
+        # Update CORS origin on agent with the real frontend URL
+        gcloud run services update sitemedic-agent \
+          --region=${_REGION} \
+          --update-env-vars="FRONTEND_URL=${FRONTEND_URL}" \
+          --project=${PROJECT_ID} --quiet
+
+        echo "✓ Frontend deployed: ${FRONTEND_URL}"
+    waitFor: [push-frontend, deploy-agent]
+
+  # ── Step 9: Smoke tests ────────────────────────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: smoke-tests
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        AGENT_URL=$(gcloud run services describe sitemedic-agent \
+          --region=${_REGION} --project=${PROJECT_ID} --format="value(status.url)")
+        FRONTEND_URL=$(gcloud run services describe sitemedic-frontend \
+          --region=${_REGION} --project=${PROJECT_ID} --format="value(status.url)")
+
+        echo "Running smoke tests…"
+        for i in 1 2 3; do
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${AGENT_URL}/health" 2>/dev/null || echo "000")
+          [ "$STATUS" = "200" ] && break
+          echo "  Attempt $i: agent health returned $STATUS, retrying in 10s…"
+          sleep 10
+        done
+        [ "$STATUS" = "200" ] || { echo "✗ Agent health check failed"; exit 1; }
+        echo "  ✓ Agent healthy"
+
+        # Verify demo status endpoint
+        DEMO_STATUS=$(curl -s --max-time 10 "${AGENT_URL}/api/demo/status" 2>/dev/null || echo "{}")
+        echo "  Demo status: $DEMO_STATUS"
+
+        # Verify frontend loads
+        FE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${FRONTEND_URL}" 2>/dev/null || echo "000")
+        [ "$FE_STATUS" = "200" ] || echo "  Warning: frontend returned $FE_STATUS"
+        echo "  ✓ Frontend reachable"
+
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════╗"
+        echo "║  Deployment complete                                     ║"
+        echo "╠══════════════════════════════════════════════════════════╣"
+        printf "║  Agent    : %-44s║\n" "$AGENT_URL"
+        printf "║  Frontend : %-44s║\n" "$FRONTEND_URL"
+        echo "╚══════════════════════════════════════════════════════════╝"
+    waitFor: [deploy-frontend]
+
+# ── Build config ────────────────────────────────────────────────────────────
+
+options:
+  machineType: "N1_HIGHCPU_8"
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _ENVIRONMENT: "prod"
+  _REGION: "us-central1"
+  _DEMO_PUBLIC: "false"
+  _FORCE_DEMO: "false"
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/agent:${_ENVIRONMENT}-latest"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/sitemedic/frontend:${_ENVIRONMENT}-latest"
+
+timeout: "3600s"

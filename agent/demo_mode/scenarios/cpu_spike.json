@@ -1,0 +1,173 @@
+{
+  "id": "cpu_spike",
+  "display_name": "CPU Spike — sitemedic-demo-app runaway process",
+  "category": "resource_exhaustion",
+  "duration_seconds": 420,
+  "description": "CPU utilization on sitemedic-demo-app climbed from 45% to 98% over 15 minutes due to a runaway background job processing a malformed message queue batch. All instances saturated, response times degrading rapidly. Restart will clear the runaway worker thread.",
+  "expected_diagnosis_keywords": ["CPU", "spike", "runaway", "thread", "process", "saturation", "restart"],
+  "expected_action": "restart_service",
+  "captured_at": "2026-05-25T05:39:00Z",
+  "events": [
+    {"t": 0, "type": "cpu_rising", "description": "CPU utilization started climbing above 60%"},
+    {"t": 90, "type": "cpu_critical", "description": "CPU reached 90% — throttling beginning"},
+    {"t": 180, "type": "response_degradation", "description": "p99 latency climbed to 4.5s"},
+    {"t": 270, "type": "cpu_saturated", "description": "CPU at 98% — all cores busy"},
+    {"t": 360, "type": "thread_dump", "description": "Runaway worker thread identified in background job executor"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-REC-005B",
+        "title": "CPU saturation on sitemedic-demo-app",
+        "status": "OPEN",
+        "severityLevel": "RESOURCE_CONTENTION",
+        "startTime": 1716616740000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-DEMOAPP002", "type": "SERVICE"},
+            "name": "sitemedic-demo-app"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-DEMOAPP002", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      }
+    ],
+    "get_problem_details:P-REC-005B": {
+      "problemId": "P-REC-005B",
+      "displayId": "P-REC-005B",
+      "title": "CPU saturation on sitemedic-demo-app",
+      "severityLevel": "RESOURCE_CONTENTION",
+      "status": "OPEN",
+      "startTime": 1716616740000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-DEMOAPP002", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-DEMOAPP002", "type": "SERVICE"},
+        "name": "sitemedic-demo-app"
+      },
+      "evidenceDetails": {
+        "totalCount": 3,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "CPU utilization: 97.8% — critical (threshold: 80%)",
+            "entity": {"id": "SERVICE-DEMOAPP002", "name": "sitemedic-demo-app"},
+            "data": {"metric": "builtin:host.cpu.usage", "value": 97.8, "threshold": 80.0}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Runaway thread detected: background-job-executor hogging 340% CPU (single process)",
+            "entity": {"id": "SERVICE-DEMOAPP002", "name": "sitemedic-demo-app"},
+            "data": {
+              "process": "background-job-executor",
+              "cpu_percent_single_core": 340,
+              "thread_name": "BatchProcessorThread-7",
+              "stuck_duration_s": 180
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Response time p99: 4,512ms — SLO breach (target: 800ms)",
+            "entity": {"id": "SERVICE-DEMOAPP002", "name": "sitemedic-demo-app"},
+            "data": {"metric": "builtin:service.response.time", "value": 4512, "unit": "ms", "slo": 800}
+          }
+        ]
+      }
+    },
+    "query_metrics:cpu_utilization": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.cpu.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP002"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-DEMOAPP002"},
+              "timestamps": [
+                1716616800000, 1716616860000, 1716616920000, 1716616980000,
+                1716617040000, 1716617100000, 1716617160000, 1716617220000,
+                1716617280000, 1716617340000, 1716617400000, 1716617460000
+              ],
+              "values": [45.2, 52.1, 61.4, 68.9, 74.3, 80.7, 85.2, 89.6, 92.4, 95.1, 97.3, 97.8]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:response_time": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP002"],
+              "timestamps": [
+                1716616800000, 1716616860000, 1716616920000, 1716616980000,
+                1716617040000, 1716617100000, 1716617160000, 1716617220000
+              ],
+              "values": [180, 220, 410, 820, 1560, 2890, 3710, 4512]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:sitemedic-demo-app": [
+      {
+        "traceId": "trace-cpu-001",
+        "spanId": "span-cpu-001",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "POST /api/process-batch",
+        "duration": 35400000,
+        "startTime": 1716617400000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "504"},
+          {"key": "error.message", "value": "Gateway timeout: upstream processing exceeded 30s"},
+          {"key": "thread.name", "value": "BatchProcessorThread-7"},
+          {"key": "cpu.usage", "value": "98.1"}
+        ],
+        "logs": [
+          {"timestamp": 1716617400050, "message": "BatchProcessorThread-7 stuck processing malformed message ID=msg-99234", "level": "WARN"},
+          {"timestamp": 1716617410000, "message": "CPU throttling active — 340% single-core consumption on PID 1247", "level": "ERROR"},
+          {"timestamp": 1716617420000, "message": "Request queue depth: 847 pending requests", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "trace-cpu-002",
+        "spanId": "span-cpu-002",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "GET /api/status",
+        "duration": 4200000,
+        "startTime": 1716617430000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "503"},
+          {"key": "error.message", "value": "Service overloaded: CPU at 98%"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-DEMOAPP002",
+        "displayName": "sitemedic-demo-app",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Node.js",
+          "cloudRunService": "sitemedic-demo-app",
+          "cloudRunRevision": "sitemedic-demo-app-00019-xyz",
+          "instances": 2,
+          "containerized": true
+        }
+      }
+    ]
+  }
+}

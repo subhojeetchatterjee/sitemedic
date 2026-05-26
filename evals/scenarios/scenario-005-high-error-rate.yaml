@@ -1,0 +1,25 @@
+id: scenario-005-high-error-rate
+name: "High Error Rate — Near-Total Outage"
+category: error
+description: >
+  Inject a 90 % error rate, simulating a near-complete service failure from a
+  catastrophically broken deployment.
+  Expected: agent identifies critical error rate, urgency, and proposes immediate rollback.
+timeout_seconds: 300
+setup:
+  - inject: errors
+    params:
+      rate: 0.9
+  - wait_seconds: 60
+expected_diagnosis:
+  root_cause_keywords: ["error", "5xx", "failure", "90%", "outage", "critical", "regression", "deploy"]
+  expected_action: "rollback_revision"
+  acceptable_actions: ["rollback_revision"]
+reference_diagnosis: >
+  90 % of requests are failing with HTTP 500. The service is effectively in an outage state.
+  The error pattern — extremely high but consistent rate since a fixed point in time —
+  is the hallmark of a bad deployment, not infrastructure degradation. The agent should
+  flag this as a high-severity AVAILABILITY incident and immediately propose rollback
+  to the last known-good revision. Scaling or restarting would not fix a code-level crash.
+teardown:
+  - reset

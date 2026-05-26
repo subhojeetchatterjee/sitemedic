@@ -1,0 +1,26 @@
+id: scenario-004-error-rate-spike
+name: "Error Rate Spike — Bad Deploy"
+category: error
+description: >
+  Inject a 50 % error rate on all endpoints, simulating a buggy revision that
+  throws unhandled exceptions on half of requests.
+  Expected: agent identifies elevated 5xx rate and proposes rollback.
+timeout_seconds: 300
+setup:
+  - inject: errors
+    params:
+      rate: 0.5
+  - wait_seconds: 90
+expected_diagnosis:
+  root_cause_keywords: ["error", "5xx", "500", "failure rate", "error rate", "exception", "50%"]
+  expected_action: "rollback_revision"
+  acceptable_actions: ["rollback_revision", "restart_service"]
+reference_diagnosis: >
+  50 % of all incoming requests are returning HTTP 500 errors. This is far above
+  the < 1 % error rate SLO. The error rate is stable and proportional, not correlated
+  with memory or CPU, which indicates a code-level bug introduced by the current revision
+  rather than a resource exhaustion issue. Rolling back to the stable revision is the
+  correct fix. Restarting is acceptable only if the agent suspects a transient state issue,
+  but rollback is more definitive for a deploy-correlated error spike.
+teardown:
+  - reset

@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  demo-app:
+    build: ./demo-app
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${DT_TENANT_URL}/api/v2/otlp
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Api-Token ${DT_API_TOKEN}"
+      OTEL_SERVICE_NAME: sitemedic-demo-app
+      OTEL_RESOURCE_ATTRIBUTES: "dt.entity.service=sitemedic-demo-app"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  agent:
+    build: ./agent
+    ports:
+      - "8080:8080"
+    environment:
+      ENV: dev
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_REGION: ${GCP_REGION:-us-central1}
+      VERTEX_AI_LOCATION: ${VERTEX_AI_LOCATION:-us-central1}
+      DT_TENANT_URL: ${DT_TENANT_URL}
+      DT_API_TOKEN: ${DT_API_TOKEN:-}
+      DT_MCP_SERVER_URL: http://dynatrace-mcp:3001
+      DT_WEBHOOK_SECRET: ${DT_WEBHOOK_SECRET:-change-me}
+      AGENT_API_KEY: ${AGENT_API_KEY:-change-me}
+      AGENT_PORT: 8080
+      FRONTEND_URL: http://localhost:3001
+      DEMO_APP_URL: http://demo-app:3000
+      DEMO_APP_SERVICE_NAME: sitemedic-demo-app
+      DEMO_APP_STABLE_REVISION: ${DEMO_APP_STABLE_REVISION:-demo-app-v1-stable}
+      DEMO_APP_BUGGY_REVISION: ${DEMO_APP_BUGGY_REVISION:-demo-app-v2-buggy}
+      SITEMEDIC_FORCE_DEMO: ${SITEMEDIC_FORCE_DEMO:-false}
+      DEMO_PUBLIC: ${DEMO_PUBLIC:-false}
+    depends_on:
+      - demo-app
+      - dynatrace-mcp
+    volumes:
+      # Mount GCP service account key for local dev (not used in Cloud Run — uses ADC)
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:/tmp/sa-key.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  dynatrace-mcp:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install -g @dynatrace/mcp-server && dynatrace-mcp-server"
+    ports:
+      - "3001:3001"
+    environment:
+      DT_URL: ${DT_TENANT_URL}
+      DT_TOKEN: ${DT_API_TOKEN}
+      PORT: 3001

@@ -1,0 +1,15 @@
+# Ignore everything not needed for the agent build
+frontend/
+demo-app/
+infra/terraform/
+docs/
+scripts/
+evals/
+tests/
+*.md
+.git/
+agent/.venv/
+agent/demo_mode/recordings/raw/
+**/__pycache__/
+**/*.pyc
+**/.env

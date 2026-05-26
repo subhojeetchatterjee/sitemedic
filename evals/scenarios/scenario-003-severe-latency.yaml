@@ -1,0 +1,27 @@
+id: scenario-003-severe-latency
+name: "Latency Spike — Bad Revision (Severe)"
+category: latency
+description: >
+  Inject 8 s artificial latency — an extreme regression that causes downstream
+  request queuing and connection pool exhaustion.
+  Expected: agent identifies severe p99 latency, notes downstream cascade risk,
+  and proposes rollback.
+timeout_seconds: 300
+setup:
+  - inject: latency
+    params:
+      ms: 8000
+  - wait_seconds: 90
+expected_diagnosis:
+  root_cause_keywords: ["latency", "p99", "8000", "8s", "severe", "timeout", "regression", "slow"]
+  expected_action: "rollback_revision"
+  acceptable_actions: ["rollback_revision"]
+reference_diagnosis: >
+  Requests are taking 8 seconds, which is 4× the SLO limit of 2000 ms.
+  At this level, client timeouts fire before most requests complete, causing cascading
+  errors in dependent services. The latency is constant across all requests regardless
+  of concurrency, ruling out a saturation cause — this is a code regression.
+  Only rolling back the revision eliminates the latency; scaling out would not help
+  because the per-request delay is fixed in code.
+teardown:
+  - reset

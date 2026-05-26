@@ -1,0 +1,29 @@
+id: scenario-007-memory-then-latency
+name: "Memory Leak Causing GC Pressure and Latency"
+category: compound
+description: >
+  Inject a memory leak first, wait for it to build up, then observe that GC pauses
+  cause incidental latency spikes. Both signals point back to memory as the root cause.
+  Expected: agent correctly attributes the latency to memory pressure, not a deploy, and
+  proposes restart rather than rollback.
+timeout_seconds: 360
+setup:
+  - inject: memory
+  - wait_seconds: 90
+  - inject: latency
+    params:
+      ms: 1500
+  - wait_seconds: 60
+expected_diagnosis:
+  root_cause_keywords: ["memory", "latency", "GC", "pressure", "heap", "resource", "leak"]
+  expected_action: "restart_service"
+  acceptable_actions: ["restart_service", "rollback_revision"]
+reference_diagnosis: >
+  The service is experiencing both a memory leak (heap growing at 10 MB/s) and elevated
+  latency. The correct diagnosis is that the latency is a SYMPTOM of memory pressure —
+  GC pauses extend as the heap fills up. The root cause is the memory leak, not a code
+  regression in request handling. The correct fix is restarting the service to clear the
+  heap. An agent that proposes rollback without mentioning memory pressure has missed
+  the true root cause. Restart is more correct here because memory is the leading cause.
+teardown:
+  - reset

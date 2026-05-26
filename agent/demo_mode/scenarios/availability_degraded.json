@@ -1,0 +1,166 @@
+{
+  "id": "availability_degraded",
+  "display_name": "Availability Degraded — sitemedic-demo-app",
+  "category": "error_rate",
+  "duration_seconds": 360,
+  "description": "Availability drop on sitemedic-demo-app to 72%. HTTP 4xx/5xx rate climbed steadily over 20 minutes, health check endpoint returning intermittent 503s. Instance count healthy but error volume points to application-layer fault requiring a service restart to clear bad state.",
+  "expected_diagnosis_keywords": ["availability", "503", "health check", "error", "5xx", "degraded", "restart"],
+  "expected_action": "restart_service",
+  "captured_at": "2026-05-25T06:23:41Z",
+  "events": [
+    {"t": 0, "type": "availability_drop", "description": "Availability fell below 80% threshold"},
+    {"t": 60, "type": "health_check_fail", "description": "Health check endpoint returning 503 intermittently"},
+    {"t": 120, "type": "error_escalation", "description": "HTTP 5xx rate reached 28%"},
+    {"t": 240, "type": "alert_fired", "description": "SLO availability alert triggered for sitemedic-demo-app"},
+    {"t": 300, "type": "impact_confirmed", "description": "End-user availability confirmed at 72%"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-REC-004",
+        "title": "Service availability degraded on sitemedic-demo-app",
+        "status": "OPEN",
+        "severityLevel": "AVAILABILITY",
+        "startTime": 1716619421000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-DEMOAPP001", "type": "SERVICE"},
+            "name": "sitemedic-demo-app"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-DEMOAPP001", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      }
+    ],
+    "get_problem_details:P-REC-004": {
+      "problemId": "P-REC-004",
+      "displayId": "P-REC-004",
+      "title": "Service availability degraded on sitemedic-demo-app",
+      "severityLevel": "AVAILABILITY",
+      "status": "OPEN",
+      "startTime": 1716619421000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-DEMOAPP001", "type": "SERVICE"},
+          "name": "sitemedic-demo-app"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-DEMOAPP001", "type": "SERVICE"},
+        "name": "sitemedic-demo-app"
+      },
+      "evidenceDetails": {
+        "totalCount": 3,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "Service availability: 72.4% — below 80% SLO threshold",
+            "entity": {"id": "SERVICE-DEMOAPP001", "name": "sitemedic-demo-app"},
+            "data": {"metric": "dt.service.availability", "value": 72.4, "threshold": 80.0}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Health check /health returning HTTP 503 — 14 times in last 5 min",
+            "entity": {"id": "SERVICE-DEMOAPP001", "name": "sitemedic-demo-app"},
+            "data": {"endpoint": "/health", "status_code": 503, "count_5min": 14}
+          },
+          {
+            "type": "METRIC",
+            "displayName": "HTTP 5xx error rate: 28.1% — up from baseline 0.3%",
+            "entity": {"id": "SERVICE-DEMOAPP001", "name": "sitemedic-demo-app"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 28.1, "baseline": 0.3}
+          }
+        ]
+      }
+    },
+    "query_metrics:error_rate": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.errors.total.rate",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP001"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-DEMOAPP001", "service.name": "sitemedic-demo-app"},
+              "timestamps": [
+                1716619200000, 1716619260000, 1716619320000, 1716619380000,
+                1716619440000, 1716619500000, 1716619560000, 1716619620000,
+                1716619680000, 1716619740000
+              ],
+              "values": [0.3, 0.4, 2.1, 5.6, 9.3, 14.7, 19.2, 23.8, 26.4, 28.1]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:response_time": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-DEMOAPP001"],
+              "timestamps": [
+                1716619200000, 1716619260000, 1716619320000, 1716619380000,
+                1716619440000, 1716619500000, 1716619560000, 1716619620000
+              ],
+              "values": [180, 195, 312, 567, 890, 1340, 2100, 3450]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:sitemedic-demo-app": [
+      {
+        "traceId": "trace-avail-001",
+        "spanId": "span-avail-001",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "GET /health",
+        "duration": 5020000,
+        "startTime": 1716619620000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "503"},
+          {"key": "error.message", "value": "Service temporarily unavailable: downstream connection refused"},
+          {"key": "http.url", "value": "/health"}
+        ],
+        "logs": [
+          {"timestamp": 1716619620100, "message": "Connection to internal health-check port refused", "level": "ERROR"},
+          {"timestamp": 1716619620200, "message": "HealthCheckHandler: downstream service unreachable, returning 503", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "trace-avail-002",
+        "spanId": "span-avail-002",
+        "serviceName": "sitemedic-demo-app",
+        "operationName": "POST /api/submit",
+        "duration": 8900000,
+        "startTime": 1716619615000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "Internal server error: request processing failed"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-DEMOAPP001",
+        "displayName": "sitemedic-demo-app",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Node.js",
+          "cloudRunService": "sitemedic-demo-app",
+          "cloudRunRevision": "sitemedic-demo-app-00018-abc",
+          "instances": 2,
+          "containerized": true
+        }
+      }
+    ]
+  }
+}

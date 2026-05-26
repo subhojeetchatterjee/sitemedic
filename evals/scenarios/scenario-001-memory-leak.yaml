@@ -1,0 +1,24 @@
+id: scenario-001-memory-leak
+name: "Memory Leak — Gradual OOM"
+category: resource
+description: >
+  The demo app allocates 10 MB every second and never frees it.
+  After ~2 minutes the process is visibly above 80 % container memory.
+  Expected: agent identifies growing memory utilization and restarts the service.
+timeout_seconds: 300
+setup:
+  - inject: memory
+  - wait_seconds: 120
+expected_diagnosis:
+  root_cause_keywords: ["memory", "leak", "OOM", "heap", "allocation", "utilization", "growing", "rss"]
+  expected_action: "restart_service"
+  acceptable_actions: ["restart_service", "scale_service"]
+reference_diagnosis: >
+  The Cloud Run container is experiencing a runaway memory leak. The demo app's
+  fault-injector allocates 10 MB per second in an unbounded Buffer array.
+  Container memory utilization trends linearly upward toward the 512 MB limit.
+  Restarting the service is the correct immediate remediation — it clears the leaked
+  heap and restores normal operation until the root-cause code defect is patched.
+  Scaling out is an acceptable temporary measure but does not fix the leak.
+teardown:
+  - reset

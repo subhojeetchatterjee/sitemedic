@@ -1,0 +1,197 @@
+{
+  "id": "memory_leak_001",
+  "display_name": "Memory Leak — checkout-service",
+  "category": "resource_exhaustion",
+  "duration_seconds": 480,
+  "description": "Persistent memory leak in the checkout-service JVM heap causing OOM conditions. Memory utilization climbing from 75% to 94% over 45 minutes. GC pressure escalating, response times degrading.",
+  "expected_diagnosis_keywords": ["memory", "leak", "OOM", "heap", "GC", "garbage collection"],
+  "expected_action": "restart_service",
+  "captured_at": "2026-05-25T14:30:00Z",
+  "events": [
+    {"t": 0, "type": "problem_opened", "description": "Memory saturation alert fired on checkout-service"},
+    {"t": 30, "type": "metric_breach", "description": "Memory utilization crossed 90% threshold"},
+    {"t": 120, "type": "gc_pressure", "description": "Full GC pause duration > 5s detected"},
+    {"t": 240, "type": "response_degradation", "description": "p99 response time climbed to 3.2s"},
+    {"t": 420, "type": "oom_risk", "description": "Heap exhaustion imminent — memory at 97%"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-12345",
+        "title": "Memory saturation on checkout-service",
+        "status": "OPEN",
+        "severityLevel": "RESOURCE_CONTENTION",
+        "startTime": 1716645600000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-CHECKOUT001", "type": "SERVICE"},
+            "name": "checkout-service"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-CHECKOUT001", "type": "SERVICE"},
+          "name": "checkout-service"
+        }
+      }
+    ],
+    "get_problem_details:P-12345": {
+      "problemId": "P-12345",
+      "displayId": "P-12345",
+      "title": "Memory saturation on checkout-service",
+      "severityLevel": "RESOURCE_CONTENTION",
+      "status": "OPEN",
+      "startTime": 1716645600000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-CHECKOUT001", "type": "SERVICE"},
+          "name": "checkout-service"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-CHECKOUT001", "type": "SERVICE"},
+        "name": "checkout-service"
+      },
+      "evidenceDetails": {
+        "totalCount": 3,
+        "details": [
+          {
+            "type": "EVENT",
+            "displayName": "Memory usage above 90% threshold",
+            "entity": {"id": "SERVICE-CHECKOUT001", "name": "checkout-service"},
+            "data": {"threshold": 90.0, "currentValue": 94.2, "metric": "jvm.memory.heap.used"}
+          },
+          {
+            "type": "METRIC",
+            "displayName": "JVM heap utilization: 94.2% — critical",
+            "entity": {"id": "SERVICE-CHECKOUT001", "name": "checkout-service"},
+            "data": {"metric": "jvm.memory.heap.used", "value": 94.2, "unit": "percent"}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Full GC pause duration 5.8s — memory pressure",
+            "entity": {"id": "SERVICE-CHECKOUT001", "name": "checkout-service"},
+            "data": {"gc_pause_ms": 5800, "gc_type": "G1_FULL", "cause": "Allocation Failure"}
+          }
+        ]
+      }
+    },
+    "query_metrics:memory_utilization": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.mem.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-CHECKOUT001"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-CHECKOUT001"},
+              "timestamps": [
+                1716642000000, 1716642060000, 1716642120000, 1716642180000,
+                1716642240000, 1716642300000, 1716642360000, 1716642420000,
+                1716642480000, 1716642540000, 1716642600000, 1716642660000
+              ],
+              "values": [75.2, 78.1, 80.3, 82.7, 84.1, 86.5, 88.2, 90.4, 91.7, 92.8, 93.5, 94.2]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:gc_pause_duration": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "jvm:gc.pause.duration",
+          "data": [
+            {
+              "dimensions": ["SERVICE-CHECKOUT001"],
+              "timestamps": [
+                1716642000000, 1716642060000, 1716642120000, 1716642180000,
+                1716642240000, 1716642300000, 1716642360000, 1716642420000
+              ],
+              "values": [0.12, 0.18, 0.45, 0.89, 1.23, 2.67, 4.12, 5.8]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:response_time": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-CHECKOUT001"],
+              "timestamps": [
+                1716642000000, 1716642060000, 1716642120000, 1716642180000,
+                1716642240000, 1716642300000, 1716642360000, 1716642420000
+              ],
+              "values": [145, 189, 287, 512, 891, 1450, 2200, 3200]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:checkout-service": [
+      {
+        "traceId": "abc123def456",
+        "spanId": "span001",
+        "serviceName": "checkout-service",
+        "operationName": "POST /checkout",
+        "duration": 3250000,
+        "startTime": 1716645300000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "503"},
+          {"key": "error.message", "value": "GC overhead limit exceeded"},
+          {"key": "jvm.memory.heap.used.percent", "value": "94.1"}
+        ],
+        "logs": [
+          {"timestamp": 1716645300100, "message": "Slow GC pause: 4120ms", "level": "WARN"},
+          {"timestamp": 1716645300500, "message": "java.lang.OutOfMemoryError: GC overhead limit exceeded", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "def789ghi012",
+        "spanId": "span002",
+        "serviceName": "checkout-service",
+        "operationName": "GET /cart",
+        "duration": 2100000,
+        "startTime": 1716645290000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.type", "value": "java.lang.OutOfMemoryError"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-CHECKOUT001",
+        "displayName": "checkout-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Java",
+          "framework": "Spring Boot 3.2",
+          "version": "2.4.1",
+          "instances": 3,
+          "containerized": true
+        },
+        "relationships": {
+          "calls": ["SERVICE-CART002", "SERVICE-PAYMENT003"],
+          "calledBy": ["SERVICE-FRONTEND001"]
+        }
+      },
+      {
+        "entityId": "SERVICE-CART002",
+        "displayName": "cart-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Node.js"
+        }
+      }
+    ]
+  }
+}

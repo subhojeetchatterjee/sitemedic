@@ -1,0 +1,29 @@
+id: scenario-006-compound-failure
+name: "Compound Failure — Latency + Errors"
+category: compound
+description: >
+  Inject both latency (2500 ms) and a 30 % error rate simultaneously, simulating a
+  revision that is both slow and partially broken.
+  Expected: agent correlates both signals to the same root cause (bad deploy) and
+  proposes rollback.
+timeout_seconds: 300
+setup:
+  - inject: latency
+    params:
+      ms: 2500
+  - inject: errors
+    params:
+      rate: 0.3
+  - wait_seconds: 90
+expected_diagnosis:
+  root_cause_keywords: ["latency", "error", "combined", "compound", "regression", "deploy", "both", "correlated"]
+  expected_action: "rollback_revision"
+  acceptable_actions: ["rollback_revision"]
+reference_diagnosis: >
+  Both p99 latency (2500 ms, above the 2000 ms SLO) and error rate (~30 %, above the 1 % SLO)
+  are simultaneously degraded. The co-occurrence of two distinct signal types starting at
+  the same time strongly indicates a single deployment regression rather than two independent
+  failures. The agent must correlate these signals and not treat them as separate incidents.
+  Rolling back the revision resolves both symptoms at once.
+teardown:
+  - reset

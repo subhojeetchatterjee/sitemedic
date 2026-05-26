@@ -1,0 +1,180 @@
+{
+  "id": "error_burst_001",
+  "display_name": "Error Burst — payment-service 500s",
+  "category": "error_rate",
+  "duration_seconds": 300,
+  "description": "Sudden burst of HTTP 500 errors from payment-service. Error rate jumped from 0.1% to 68% within 2 minutes. Stack traces show a corrupted in-memory session cache causing NullPointerException on every request. Restart will clear the bad state.",
+  "expected_diagnosis_keywords": ["error", "500", "exception", "crash", "null pointer", "cache", "corrupt", "restart"],
+  "expected_action": "restart_service",
+  "captured_at": "2026-05-25T11:45:00Z",
+  "events": [
+    {"t": 0, "type": "error_spike", "description": "HTTP 500 error rate jumped to 68%"},
+    {"t": 30, "type": "stack_trace", "description": "NullPointerException in SessionCacheManager detected"},
+    {"t": 90, "type": "cache_corruption", "description": "In-memory session cache identified as corrupted"},
+    {"t": 150, "type": "impact_confirmed", "description": "All payment attempts failing — revenue impact"},
+    {"t": 240, "type": "alert_escalated", "description": "P1 alert escalated to on-call SRE"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-99001",
+        "title": "High failure rate on payment-service",
+        "status": "OPEN",
+        "severityLevel": "AVAILABILITY",
+        "startTime": 1716634200000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-PAY001", "type": "SERVICE"},
+            "name": "payment-service"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-PAY001", "type": "SERVICE"},
+          "name": "payment-service"
+        }
+      }
+    ],
+    "get_problem_details:P-99001": {
+      "problemId": "P-99001",
+      "displayId": "P-99001",
+      "title": "High failure rate on payment-service",
+      "severityLevel": "AVAILABILITY",
+      "status": "OPEN",
+      "startTime": 1716634200000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-PAY001", "type": "SERVICE"},
+          "name": "payment-service"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-PAY001", "type": "SERVICE"},
+        "name": "payment-service"
+      },
+      "evidenceDetails": {
+        "totalCount": 3,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "Failure rate 68.4% — critical (threshold: 5%)",
+            "entity": {"id": "SERVICE-PAY001", "name": "payment-service"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 68.4, "threshold": 5.0}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "Exception burst: 842 NullPointerException in last 3 minutes",
+            "entity": {"id": "SERVICE-PAY001", "name": "payment-service"},
+            "data": {
+              "exception_type": "java.lang.NullPointerException",
+              "exception_count": 842,
+              "window_minutes": 3,
+              "top_location": "com.sitemedic.payment.SessionCacheManager.getSession(SessionCacheManager.java:78)"
+            }
+          },
+          {
+            "type": "EVENT",
+            "displayName": "In-memory cache corrupted: session store returning null for all keys",
+            "entity": {"id": "SERVICE-PAY001", "name": "payment-service"},
+            "data": {
+              "cache_type": "in-memory",
+              "cache_size": 0,
+              "expected_size": 4521,
+              "corruption_cause": "Concurrent modification during garbage collection pause",
+              "restart_will_fix": true
+            }
+          }
+        ]
+      }
+    },
+    "query_metrics:error_rate": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.errors.total.rate",
+          "data": [
+            {
+              "dimensions": ["SERVICE-PAY001"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-PAY001", "service.name": "payment-service"},
+              "timestamps": [
+                1716633900000, 1716633960000, 1716634020000, 1716634080000,
+                1716634140000, 1716634200000, 1716634260000, 1716634320000,
+                1716634380000, 1716634440000
+              ],
+              "values": [0.1, 0.1, 0.2, 0.1, 0.3, 61.2, 66.8, 68.4, 68.1, 67.9]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:exception_count": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "dt.runtime.exception.count",
+          "data": [
+            {
+              "dimensions": ["SERVICE-PAY001"],
+              "timestamps": [
+                1716633900000, 1716633960000, 1716634020000, 1716634080000,
+                1716634140000, 1716634200000, 1716634260000, 1716634320000
+              ],
+              "values": [0, 1, 0, 2, 1, 287, 312, 243]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:payment-service": [
+      {
+        "traceId": "pay001trace",
+        "spanId": "pay001span",
+        "serviceName": "payment-service",
+        "operationName": "POST /payment/process",
+        "duration": 45000,
+        "startTime": 1716634300000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "NullPointerException: session is null"},
+          {"key": "exception.type", "value": "java.lang.NullPointerException"},
+          {"key": "exception.stacktrace", "value": "at com.sitemedic.payment.SessionCacheManager.getSession(SessionCacheManager.java:78)\nat com.sitemedic.payment.PaymentHandler.processPayment(PaymentHandler.java:112)"}
+        ],
+        "logs": [
+          {"timestamp": 1716634300010, "message": "WARN: Cache miss for session key [usr_8821] — cache size is 0 (expected ~4500)", "level": "WARN"},
+          {"timestamp": 1716634300015, "message": "ERROR: java.lang.NullPointerException: Cannot invoke 'Session.getUserId()' because 'session' is null", "level": "ERROR"}
+        ]
+      },
+      {
+        "traceId": "pay002trace",
+        "spanId": "pay002span",
+        "serviceName": "payment-service",
+        "operationName": "GET /payment/status",
+        "duration": 22000,
+        "startTime": 1716634305000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "500"},
+          {"key": "error.message", "value": "NullPointerException: session is null"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-PAY001",
+        "displayName": "payment-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Java",
+          "framework": "Spring Boot 3.1",
+          "version": "1.9.3",
+          "cloudRunService": "payment-service",
+          "instances": 2,
+          "uptime_seconds": 86400,
+          "last_restart": "2026-05-24T11:45:00Z"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "id": "cascading_failure_001",
+  "display_name": "Cascading Failure — multi-service deploy regression",
+  "category": "cascading",
+  "duration_seconds": 600,
+  "description": "Shared library upgrade (commons-http v4.5.14) deployed to order-service caused connection pool exhaustion, cascading into inventory-service and notification-service. Root cause: breaking API change in connection pool configuration.",
+  "expected_diagnosis_keywords": ["cascade", "propagation", "dependency", "rollback", "shared library", "connection pool", "multiple services"],
+  "expected_action": "rollback_revision",
+  "captured_at": "2026-05-25T09:00:00Z",
+  "events": [
+    {"t": 0, "type": "deploy_completed", "description": "order-service v3.1.0 deployed with commons-http upgrade"},
+    {"t": 90, "type": "connection_exhaustion", "description": "order-service connection pool exhausted"},
+    {"t": 180, "type": "cascade_start", "description": "inventory-service timeouts begin as order-service stops responding"},
+    {"t": 300, "type": "cascade_spread", "description": "notification-service also affected — dependency chain broken"},
+    {"t": 480, "type": "user_impact", "description": "Order placement completely unavailable"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-33333",
+        "title": "Service availability degradation — cascading failure across 3 services",
+        "status": "OPEN",
+        "severityLevel": "AVAILABILITY",
+        "startTime": 1716620400000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+            "name": "order-service"
+          },
+          {
+            "entityId": {"id": "SERVICE-INV005", "type": "SERVICE"},
+            "name": "inventory-service"
+          },
+          {
+            "entityId": {"id": "SERVICE-NOTIF006", "type": "SERVICE"},
+            "name": "notification-service"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+          "name": "order-service"
+        }
+      }
+    ],
+    "get_problem_details:P-33333": {
+      "problemId": "P-33333",
+      "displayId": "P-33333",
+      "title": "Service availability degradation — cascading failure across 3 services",
+      "severityLevel": "AVAILABILITY",
+      "status": "OPEN",
+      "startTime": 1716620400000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+          "name": "order-service"
+        },
+        {
+          "entityId": {"id": "SERVICE-INV005", "type": "SERVICE"},
+          "name": "inventory-service"
+        },
+        {
+          "entityId": {"id": "SERVICE-NOTIF006", "type": "SERVICE"},
+          "name": "notification-service"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-ORDER004", "type": "SERVICE"},
+        "name": "order-service"
+      },
+      "evidenceDetails": {
+        "totalCount": 5,
+        "details": [
+          {
+            "type": "EVENT",
+            "displayName": "Deployment: order-service v3.1.0 deployed at 09:00:12 UTC with commons-http upgrade",
+            "entity": {"id": "SERVICE-ORDER004", "name": "order-service"},
+            "data": {
+              "eventType": "CUSTOM_DEPLOYMENT",
+              "deployedVersion": "v3.1.0",
+              "previousVersion": "v3.0.8",
+              "libraryChanges": ["commons-http: 4.5.13 -> 4.5.14"],
+              "cloudRunRevision": "order-service-00089-abc"
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "order-service: connection pool 100% exhausted (0/50 connections available)",
+            "entity": {"id": "SERVICE-ORDER004", "name": "order-service"},
+            "data": {
+              "metric": "http.client.connection.pool.active",
+              "pool_size": 50,
+              "active_connections": 50,
+              "available_connections": 0,
+              "wait_queue_depth": 287
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "inventory-service error rate: 89% (caused by order-service timeout)",
+            "entity": {"id": "SERVICE-INV005", "name": "inventory-service"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 89.1, "caused_by": "order-service connection timeout"}
+          },
+          {
+            "type": "METRIC",
+            "displayName": "notification-service error rate: 76% (queue consumer blocked)",
+            "entity": {"id": "SERVICE-NOTIF006", "name": "notification-service"},
+            "data": {"metric": "dt.service.request.failure_rate", "value": 76.3, "caused_by": "order-service event stream blocked"}
+          },
+          {
+            "type": "EVENT",
+            "displayName": "commons-http v4.5.14 breaking change: maxConnTotal now requires explicit initialization",
+            "entity": {"id": "SERVICE-ORDER004", "name": "order-service"},
+            "data": {
+              "library": "commons-http",
+              "breaking_change": "maxConnTotal defaults to 0 (unlimited) in 4.5.13 but requires explicit positive value in 4.5.14",
+              "effect": "All connections immediately blocked on first request batch"
+            }
+          }
+        ]
+      }
+    },
+    "query_metrics:error_rate_all_services": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.errors.total.rate",
+          "data": [
+            {
+              "dimensions": ["SERVICE-ORDER004"],
+              "dimensionMap": {"service.name": "order-service"},
+              "timestamps": [1716620100000, 1716620160000, 1716620220000, 1716620280000, 1716620340000, 1716620400000, 1716620460000, 1716620520000],
+              "values": [0.4, 0.3, 0.5, 0.4, 0.3, 72.1, 91.4, 94.8]
+            },
+            {
+              "dimensions": ["SERVICE-INV005"],
+              "dimensionMap": {"service.name": "inventory-service"},
+              "timestamps": [1716620100000, 1716620160000, 1716620220000, 1716620280000, 1716620340000, 1716620400000, 1716620460000, 1716620520000],
+              "values": [0.2, 0.2, 0.1, 0.3, 12.4, 45.8, 78.2, 89.1]
+            },
+            {
+              "dimensions": ["SERVICE-NOTIF006"],
+              "dimensionMap": {"service.name": "notification-service"},
+              "timestamps": [1716620100000, 1716620160000, 1716620220000, 1716620280000, 1716620340000, 1716620400000, 1716620460000, 1716620520000],
+              "values": [0.0, 0.1, 0.0, 0.2, 8.9, 32.1, 59.4, 76.3]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:order-service": [
+      {
+        "traceId": "cas001trace",
+        "spanId": "cas001span",
+        "serviceName": "order-service",
+        "operationName": "POST /orders/create",
+        "duration": 30001000,
+        "startTime": 1716620500000,
+        "status": "ERROR",
+        "tags": [
+          {"key": "http.status_code", "value": "503"},
+          {"key": "error.message", "value": "Connection pool exhausted: timeout acquiring connection after 30000ms"},
+          {"key": "library", "value": "commons-http:4.5.14"},
+          {"key": "pool.available", "value": "0"},
+          {"key": "pool.waiting", "value": "287"}
+        ],
+        "logs": [
+          {"timestamp": 1716620500010, "message": "ERROR: org.apache.http.conn.ConnectionPoolTimeoutException: Timeout waiting for connection from pool", "level": "ERROR"},
+          {"timestamp": 1716620500012, "message": "WARN: Connection pool metrics — total: 50, available: 0, leased: 50, pending: 287", "level": "WARN"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-ORDER004",
+        "displayName": "order-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Java",
+          "cloudRunService": "order-service",
+          "cloudRunRevision": "order-service-00089-abc",
+          "previousStableRevision": "order-service-00088-xyz",
+          "deployedVersion": "v3.1.0",
+          "previousVersion": "v3.0.8"
+        },
+        "relationships": {
+          "calls": ["SERVICE-INV005", "SERVICE-NOTIF006", "SERVICE-PAY001"],
+          "calledBy": ["SERVICE-APIGW001", "SERVICE-FRONTEND001"]
+        }
+      },
+      {
+        "entityId": "SERVICE-INV005",
+        "displayName": "inventory-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Python"
+        },
+        "relationships": {
+          "calledBy": ["SERVICE-ORDER004"]
+        }
+      },
+      {
+        "entityId": "SERVICE-NOTIF006",
+        "displayName": "notification-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Node.js"
+        },
+        "relationships": {
+          "calledBy": ["SERVICE-ORDER004"]
+        }
+      }
+    ]
+  }
+}

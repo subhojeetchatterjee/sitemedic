@@ -1,0 +1,25 @@
+id: scenario-008-gradual-memory-growth
+name: "Gradual Memory Growth — Slow Leak"
+category: resource
+description: >
+  Inject a memory leak with a long observation window. The leak is slow enough that
+  the first few detection cycles may see it as within normal range. Tests whether the
+  agent uses trend analysis (slope) rather than threshold crossing to identify the issue.
+  Expected: agent identifies the upward trend and forecasts a breach.
+timeout_seconds: 360
+setup:
+  - inject: memory
+  - wait_seconds: 180
+expected_diagnosis:
+  root_cause_keywords: ["memory", "trend", "growing", "utilization", "leak", "increasing", "slope"]
+  expected_action: "restart_service"
+  acceptable_actions: ["restart_service", "scale_service"]
+reference_diagnosis: >
+  The container's memory utilization is on a continuous upward slope of approximately
+  10 MB per second. Even if the current level has not yet crossed the OOM threshold,
+  the rate of growth guarantees a breach within minutes. The agent should identify the
+  trend (not just the current level) as the signal, recognize this as a memory leak
+  pattern, and recommend restarting the service. This tests whether the agent uses
+  trend-based reasoning rather than simple threshold-crossing detection.
+teardown:
+  - reset

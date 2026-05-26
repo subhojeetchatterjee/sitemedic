@@ -1,0 +1,217 @@
+{
+  "id": "predictive_catch_001",
+  "display_name": "Predictive Catch — recommendation-service gradual degradation",
+  "category": "predictive",
+  "duration_seconds": 540,
+  "description": "Slow, gradual CPU and memory creep on recommendation-service. ML model inference cache warming up without bound. SLO not yet breached but trending will cause breach in ~12 minutes. Scaling now prevents user impact.",
+  "expected_diagnosis_keywords": ["predict", "trend", "gradual", "scale", "pre-emptive", "forecast", "degradation", "CPU", "memory"],
+  "expected_action": "scale_service",
+  "captured_at": "2026-05-25T08:00:00Z",
+  "events": [
+    {"t": 0, "type": "trend_detected", "description": "Predictive analysis: CPU trending up 2.3%/min"},
+    {"t": 120, "type": "memory_trend", "description": "Memory also climbing — ML cache growing unchecked"},
+    {"t": 300, "type": "prediction_fired", "description": "Predicted SLO breach in 12 minutes at current trend"},
+    {"t": 420, "type": "early_warning", "description": "p90 latency at 850ms, SLO threshold is 1000ms"},
+    {"t": 540, "type": "imminent_breach", "description": "Without action, breach expected in 3 minutes"}
+  ],
+  "tool_response_map": {
+    "list_problems:default": [
+      {
+        "problemId": "P-55555",
+        "title": "Gradual performance degradation on recommendation-service — SLO breach imminent",
+        "status": "OPEN",
+        "severityLevel": "PERFORMANCE",
+        "startTime": 1716616800000,
+        "impactedEntities": [
+          {
+            "entityId": {"id": "SERVICE-REC007", "type": "SERVICE"},
+            "name": "recommendation-service"
+          }
+        ],
+        "rootCauseEntity": {
+          "entityId": {"id": "SERVICE-REC007", "type": "SERVICE"},
+          "name": "recommendation-service"
+        }
+      }
+    ],
+    "get_problem_details:P-55555": {
+      "problemId": "P-55555",
+      "displayId": "P-55555",
+      "title": "Gradual performance degradation on recommendation-service — SLO breach imminent",
+      "severityLevel": "PERFORMANCE",
+      "status": "OPEN",
+      "startTime": 1716616800000,
+      "endTime": -1,
+      "impactedEntities": [
+        {
+          "entityId": {"id": "SERVICE-REC007", "type": "SERVICE"},
+          "name": "recommendation-service"
+        }
+      ],
+      "rootCauseEntity": {
+        "entityId": {"id": "SERVICE-REC007", "type": "SERVICE"},
+        "name": "recommendation-service"
+      },
+      "evidenceDetails": {
+        "totalCount": 4,
+        "details": [
+          {
+            "type": "METRIC",
+            "displayName": "CPU utilization trending: 45% → 82% over 35 minutes (rate: +2.3%/min)",
+            "entity": {"id": "SERVICE-REC007", "name": "recommendation-service"},
+            "data": {
+              "metric": "builtin:host.cpu.usage",
+              "current_value": 82.1,
+              "start_value": 45.3,
+              "trend_rate_per_minute": 2.3,
+              "minutes_elapsed": 35,
+              "projected_saturation_minutes": 8
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "Memory trending: 52% → 76% over 35 minutes (ML model cache growing)",
+            "entity": {"id": "SERVICE-REC007", "name": "recommendation-service"},
+            "data": {
+              "metric": "builtin:host.mem.usage",
+              "current_value": 76.4,
+              "start_value": 52.1,
+              "trend_rate_per_minute": 0.7,
+              "cache_size_mb": 1240,
+              "cache_growth_mb_per_minute": 35
+            }
+          },
+          {
+            "type": "METRIC",
+            "displayName": "p90 response time: 850ms and climbing (SLO threshold: 1000ms, breach in ~12min)",
+            "entity": {"id": "SERVICE-REC007", "name": "recommendation-service"},
+            "data": {
+              "metric": "builtin:service.response.time",
+              "p90_ms": 850,
+              "slo_threshold_ms": 1000,
+              "trend_ms_per_minute": 12.5,
+              "projected_breach_minutes": 12
+            }
+          },
+          {
+            "type": "EVENT",
+            "displayName": "ML inference cache: unbounded growth detected — no eviction policy configured",
+            "entity": {"id": "SERVICE-REC007", "name": "recommendation-service"},
+            "data": {
+              "cache_type": "in-memory inference cache",
+              "cache_entries": 84210,
+              "max_entries": "unlimited",
+              "eviction_policy": "none",
+              "recommendation": "Scale service to add capacity — eviction policy fix should be deployed in next release"
+            }
+          }
+        ]
+      }
+    },
+    "query_metrics:cpu_trend": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.cpu.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-REC007"],
+              "dimensionMap": {"dt.entity.service": "SERVICE-REC007"},
+              "timestamps": [
+                1716614700000, 1716614760000, 1716614820000, 1716614880000,
+                1716614940000, 1716615000000, 1716615060000, 1716615120000,
+                1716615180000, 1716615240000, 1716615300000, 1716615360000,
+                1716615420000, 1716615480000, 1716615540000, 1716615600000,
+                1716615660000, 1716615720000, 1716615780000, 1716615840000
+              ],
+              "values": [
+                45.3, 47.6, 49.2, 51.8, 54.1, 56.4, 58.9, 61.2,
+                63.8, 66.1, 68.4, 70.7, 73.0, 75.3, 77.6, 79.9,
+                81.2, 82.1, 82.4, 82.6
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:memory_trend": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:host.mem.usage",
+          "data": [
+            {
+              "dimensions": ["SERVICE-REC007"],
+              "timestamps": [
+                1716614700000, 1716614760000, 1716614820000, 1716614880000,
+                1716614940000, 1716615000000, 1716615060000, 1716615120000,
+                1716615180000, 1716615240000, 1716615300000, 1716615360000
+              ],
+              "values": [52.1, 52.8, 53.5, 54.3, 55.1, 56.0, 57.8, 59.6, 61.4, 63.2, 65.0, 67.1]
+            }
+          ]
+        }
+      ]
+    },
+    "query_metrics:response_time_trend": {
+      "resolution": "1m",
+      "result": [
+        {
+          "metricId": "builtin:service.response.time",
+          "data": [
+            {
+              "dimensions": ["SERVICE-REC007"],
+              "timestamps": [
+                1716614700000, 1716614760000, 1716614820000, 1716614880000,
+                1716614940000, 1716615000000, 1716615060000, 1716615120000,
+                1716615180000, 1716615240000, 1716615300000, 1716615360000
+              ],
+              "values": [410, 430, 460, 490, 510, 560, 610, 660, 710, 760, 810, 850]
+            }
+          ]
+        }
+      ]
+    },
+    "get_traces:recommendation-service": [
+      {
+        "traceId": "pred001trace",
+        "spanId": "pred001span",
+        "serviceName": "recommendation-service",
+        "operationName": "GET /recommendations",
+        "duration": 862000,
+        "startTime": 1716616800000,
+        "status": "OK",
+        "tags": [
+          {"key": "http.status_code", "value": "200"},
+          {"key": "ml.inference.cache_hit", "value": "false"},
+          {"key": "ml.inference.duration_ms", "value": "720"},
+          {"key": "ml.cache.entries", "value": "84210"},
+          {"key": "cpu.throttled", "value": "true"}
+        ],
+        "logs": [
+          {"timestamp": 1716616800100, "message": "WARN: CPU throttling detected — inference taking 720ms (SLA: 500ms)", "level": "WARN"},
+          {"timestamp": 1716616800200, "message": "INFO: Cache size 84210 entries (1240 MB) — no eviction configured", "level": "INFO"}
+        ]
+      }
+    ],
+    "list_entities:SERVICE": [
+      {
+        "entityId": "SERVICE-REC007",
+        "displayName": "recommendation-service",
+        "type": "SERVICE",
+        "properties": {
+          "serviceType": "WEB_REQUEST_SERVICE",
+          "technology": "Python",
+          "framework": "FastAPI",
+          "cloudRunService": "recommendation-service",
+          "currentInstances": 2,
+          "minInstances": 1,
+          "maxInstances": 10,
+          "cpuLimit": "4",
+          "memoryLimit": "8Gi",
+          "concurrency": 20
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+# SiteMedic Production Environment Configuration
+environment: prod
+description: "Production environment - CRITICAL"
+
+# GCP Configuration
+gcp:
+  project_id: ${GCP_PROJECT_ID}
+  region: us-central1
+
+# Firestore Configuration
+firestore:
+  database: "(default)"
+  emulator_host: null
+
+# Vertex AI / Gemini Configuration
+vertex_ai:
+  location: us-central1
+  model_version: gemini-2.5-pro
+  max_tokens: 2048  # More conservative in prod
+  temperature: 0.3  # Lower temperature for consistency
+
+# Dynatrace Configuration (optional — agent auto-falls back to demo mode if absent)
+dynatrace:
+  tenant_url: ${DT_TENANT_URL:}
+  api_token: ${DT_API_TOKEN:}
+  mcp_server_url: ${DT_MCP_SERVER_URL:}
+  webhook_secret: ${DT_WEBHOOK_SECRET:change-me}
+
+# Demo Mode Configuration
+demo_mode:
+  force_demo: ${SITEMEDIC_FORCE_DEMO:false}   # Override: always use demo source
+  disable_demo: ${SITEMEDIC_DISABLE_DEMO:false} # Override: never fall back to demo
+  demo_public: ${DEMO_PUBLIC:false}             # No auth for hosted judges URL
+
+# Cloud Run Services
+cloud_run:
+  region: us-central1
+  demo_app_url: ${DEMO_APP_URL:https://sitemedic-demo-app.run.app}
+  agent_url: ${AGENT_URL:https://sitemedic-agent.run.app}
+
+# Detection Configuration
+detection:
+  polling_interval_seconds: 300  # 5 minutes fallback polling
+  webhook_enabled: true
+  fallback_polling_enabled: true
+
+# Prediction Configuration
+prediction:
+  enabled: true
+  interval_seconds: 300
+  ttl_minutes: 30
+
+# Remediation Configuration
+remediation:
+  dry_run_only: false  # Real execution in production
+  auto_approve_threshold: 0.85  # Only auto-approve high-confidence actions
+  require_explicit_confirmation: true  # ALWAYS require confirmation for destructive actions
+  max_concurrent_remediations: 2  # Conservative; prefer serial execution
+
+# Circuit Breaker Configuration (stricter in production)
+circuit_breaker:
+  gemini_error_threshold: 5  # Lower threshold; fail faster
+  gemini_success_threshold: 3
+  dynatrace_error_threshold: 5  # Lower threshold; fail faster
+  dynatrace_success_threshold: 3
+  firestore_error_threshold: 3  # Firestore is critical
+  firestore_success_threshold: 2
+
+# Cost Configuration
+cost:
+  track_enabled: true
+  alert_threshold_usd: 200  # Alert if exceeded in production
+  budget_limit_usd: 500  # Hard limit; stop operations if exceeded
+
+# Correlation Configuration
+correlation:
+  enabled: true
+  temporal_window_minutes: 5
+  confidence_threshold: 0.85  # Higher confidence threshold in prod
+
+# Logging Configuration
+logging:
+  level: INFO  # Reduced from DEBUG
+  format: json
+  structured: true
+  include_pii: false  # NEVER include PII
+  include_trace_details: false  # Reduce verbosity
+
+# Feature Flags
+features:
+  evals_enabled: false  # DISABLED in production
+  chaos_enabled: false  # DISABLED in production
+  predictions_enabled: true
+  correlation_enabled: true
+  dry_run_mode: false
+
+# Audit Configuration
+audit:
+  enabled: true
+  ttl_days: 365  # Keep audit logs for a year in production
+  log_to_cloud_logging: true
+
+# Demo App Configuration
+demo_app:
+  stable_revision: demo-app-prod-v1
+  buggy_revision: demo-app-prod-v2

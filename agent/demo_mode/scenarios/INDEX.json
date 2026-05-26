@@ -1,0 +1,94 @@
+{
+  "version": "1",
+  "updated_at": "2026-05-25T12:00:00Z",
+  "scenarios": [
+    {
+      "id": "memory_leak_001",
+      "display_name": "Memory Leak — checkout-service",
+      "category": "resource_exhaustion",
+      "duration_seconds": 480,
+      "description": "Persistent memory leak in the checkout-service JVM heap causing OOM conditions. Memory utilization climbing from 75% to 94% over 45 minutes. GC pressure escalating, response times degrading.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "bad_deploy_rollback_001",
+      "display_name": "Bad Deployment — api-gateway rollback",
+      "category": "bad_deploy",
+      "duration_seconds": 360,
+      "description": "Deployment of v2.8.0 to api-gateway introduced a regression causing 42% HTTP 5xx error rate. Errors began immediately post-deploy at 14:05 UTC. Previous stable revision is v2.7.9.",
+      "expected_action": "rollback_revision"
+    },
+    {
+      "id": "latency_spike_001",
+      "display_name": "Latency Spike — api-gateway under load",
+      "category": "performance",
+      "duration_seconds": 420,
+      "description": "Traffic surge causing p99 latency on api-gateway to spike from 180ms to 4.8s. CPU utilization at 95%, request queue depth growing. More instances needed to absorb load.",
+      "expected_action": "scale_service"
+    },
+    {
+      "id": "error_burst_001",
+      "display_name": "Error Burst — payment-service 500s",
+      "category": "error_rate",
+      "duration_seconds": 300,
+      "description": "Sudden burst of HTTP 500 errors from payment-service. Error rate jumped from 0.1% to 68% within 2 minutes. Stack traces show a corrupted in-memory session cache causing NullPointerException on every request.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "cascading_failure_001",
+      "display_name": "Cascading Failure — multi-service deploy regression",
+      "category": "cascading",
+      "duration_seconds": 600,
+      "description": "Shared library upgrade (commons-http v4.5.14) deployed to order-service caused connection pool exhaustion, cascading into inventory-service and notification-service.",
+      "expected_action": "rollback_revision"
+    },
+    {
+      "id": "predictive_catch_001",
+      "display_name": "Predictive Catch — recommendation-service gradual degradation",
+      "category": "predictive",
+      "duration_seconds": 540,
+      "description": "Slow, gradual CPU and memory creep on recommendation-service. ML model inference cache warming up without bound. SLO not yet breached but trending will cause breach in ~12 minutes.",
+      "expected_action": "scale_service"
+    },
+    {
+      "id": "availability_degraded",
+      "display_name": "Availability Degraded — sitemedic-demo-app",
+      "category": "error_rate",
+      "duration_seconds": 360,
+      "description": "Availability drop on sitemedic-demo-app to 72%. HTTP 4xx/5xx rate climbed steadily over 20 minutes, health check endpoint returning intermittent 503s.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "cpu_spike",
+      "display_name": "CPU Spike — sitemedic-demo-app runaway process",
+      "category": "resource_exhaustion",
+      "duration_seconds": 420,
+      "description": "CPU utilization on sitemedic-demo-app climbed from 45% to 98% due to a runaway background job processing a malformed message queue batch.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "high_error_rate",
+      "display_name": "High Error Rate — sitemedic-demo-app",
+      "category": "error_rate",
+      "duration_seconds": 300,
+      "description": "Sustained 55% error rate after a bad config push set DB_POOL_SIZE=0. All requests failing with connection acquisition timeout.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "high_memory",
+      "display_name": "High Memory — sitemedic-demo-app heap leak",
+      "category": "resource_exhaustion",
+      "duration_seconds": 480,
+      "description": "Memory utilization climbing steadily from 68% to 93% due to unbounded HTTP response cache growth with no eviction policy.",
+      "expected_action": "restart_service"
+    },
+    {
+      "id": "slow_response",
+      "display_name": "Slow Response — sitemedic-demo-app DB query regression",
+      "category": "performance",
+      "duration_seconds": 420,
+      "description": "p99 response time spiked from 190ms to 8.2s after a missing database index was introduced by a schema migration. Full table scans on every /api/search request.",
+      "expected_action": "scale_service"
+    }
+  ]
+}

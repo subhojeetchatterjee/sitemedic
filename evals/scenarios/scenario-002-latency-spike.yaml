@@ -1,0 +1,25 @@
+id: scenario-002-latency-spike
+name: "Latency Spike — Bad Revision (Moderate)"
+category: latency
+description: >
+  Inject 3 s artificial latency on all checkout and product requests, simulating
+  a slow dependency introduced by a recent deployment.
+  Expected: agent identifies p99 latency breach and proposes rollback or scale-out.
+timeout_seconds: 300
+setup:
+  - inject: latency
+    params:
+      ms: 3000
+  - wait_seconds: 90
+expected_diagnosis:
+  root_cause_keywords: ["latency", "slow", "response time", "p99", "timeout", "delay", "3000", "3s"]
+  expected_action: "rollback_revision"
+  acceptable_actions: ["rollback_revision", "scale_service"]
+reference_diagnosis: >
+  All /checkout and /products requests are artificially delayed by 3000 ms.
+  This manifests as a p99 latency spike far above the 2000 ms SLO threshold.
+  The injected latency is deterministic and present on every request, not load-dependent,
+  which points to a code-path regression introduced in the current revision rather than
+  a saturation issue. Rolling back to the stable revision is the correct fix.
+teardown:
+  - reset

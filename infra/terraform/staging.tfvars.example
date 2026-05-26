@@ -1,0 +1,31 @@
+# Staging environment Terraform variables
+# Copy to staging.tfvars and fill in actual values
+
+gcp_project_id  = "your-gcp-project-staging"
+gcp_region      = "us-central1"
+environment     = "staging"
+
+# Dynatrace (staging tenant)
+dynatrace_api_token       = "dt0c01.XXXXXXXXXXXX"
+dynatrace_webhook_secret  = "your-webhook-signing-secret-staging"
+
+# SiteMedic agent
+agent_api_key = "your-agent-api-key-staging"
+
+# Firebase admin credentials
+firebase_admin_credentials_json = jsonencode({
+  type                    = "service_account"
+  project_id              = "your-gcp-project-staging"
+  private_key_id          = "..."
+  private_key             = "..."
+  client_email            = "firebase-adminsdk-xxxxx@your-gcp-project-staging.iam.gserviceaccount.com"
+  client_id               = "..."
+  auth_uri                = "https://accounts.google.com/o/oauth2/auth"
+  token_uri               = "https://oauth2.googleapis.com/token"
+  auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+})
+
+# Notifications (recommended in staging)
+slack_webhook_url         = "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+pagerduty_integration_key = "your-pagerduty-key"
+google_chat_webhook_url   = "https://chat.googleapis.com/v1/spaces/YOUR/SPACE/messages?key=KEY"

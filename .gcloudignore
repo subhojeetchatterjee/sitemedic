@@ -1,0 +1,14 @@
+# Source upload exclusions for gcloud builds submit
+# (separate from .dockerignore which is used by Docker daemon per build context)
+.git/
+.gcloudignore
+agent/.venv/
+agent/demo_mode/recordings/raw/
+node_modules/
+frontend/node_modules/
+demo-app/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.env
+infra/terraform/
+evals/
