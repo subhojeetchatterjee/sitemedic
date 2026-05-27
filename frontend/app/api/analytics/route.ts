@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   try {
     const upstream = await fetch(
       `${agentUrl()}/api/analytics?window=${window}`,
-      { next: { revalidate: 300 } },
+      { cache: "no-store" },
     );
     if (!upstream.ok) {
       return NextResponse.json(
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     }
     const data = await upstream.json();
     return NextResponse.json(data, {
-      headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "no-store" },
     });
   } catch {
     return NextResponse.json(null, { status: 200 });
