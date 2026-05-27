@@ -311,8 +311,15 @@ class DemoModeSource(TelemetrySource):
                 return active
         return None
 
+    def _expire_resolved(self) -> None:
+        """Mark any time-elapsed scenarios as resolved immediately."""
+        for active in self._active:
+            if not active.resolved and active.should_resolve:
+                active.resolved = True
+
     def _first_active_scenario(self) -> ActiveScenario | None:
         """Return the first non-resolved active scenario."""
+        self._expire_resolved()
         for active in self._active:
             if not active.resolved:
                 return active
@@ -468,6 +475,7 @@ class DemoModeSource(TelemetrySource):
         return result if isinstance(result, dict) else {}
 
     def get_source_metadata(self) -> SourceMetadata:
+        self._expire_resolved()
         active = self._first_active_scenario()
         return SourceMetadata(
             is_live=False,
