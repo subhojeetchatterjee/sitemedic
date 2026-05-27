@@ -94,7 +94,7 @@ class DemoModeSource(TelemetrySource):
         self._active: list[ActiveScenario] = []
         self._rotation_idx: int = 0
         self._trigger_counter: int = 0
-        self._scheduler_paused: bool = False
+        self._scheduler_paused: bool = True  # start paused; judges trigger manually
         self._scheduler_task: asyncio.Task | None = None
         self._lock: asyncio.Lock | None = None  # created lazily inside event loop
 

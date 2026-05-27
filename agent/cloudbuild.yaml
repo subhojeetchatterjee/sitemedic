@@ -1,0 +1,18 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - "-f"
+      - "agent/Dockerfile"
+      - "-t"
+      - "${_REGISTRY}/sitemedic-agent:latest"
+      - "."
+
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_REGISTRY}/sitemedic-agent:latest"]
+
+images:
+  - "${_REGISTRY}/sitemedic-agent:latest"
+
+substitutions:
+  _REGISTRY: "us-central1-docker.pkg.dev/sitemedic-496608/sitemedic"

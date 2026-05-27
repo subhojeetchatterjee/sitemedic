@@ -36,7 +36,7 @@ DT_API_TOKEN="${DT_API_TOKEN:-}"
 DT_MCP_SERVER_URL="${DT_MCP_SERVER_URL:-}"
 DT_WEBHOOK_SECRET="${DT_WEBHOOK_SECRET:-change-me}"
 
-REGISTRY="gcr.io/${GCP_PROJECT_ID}"
+REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/sitemedic"
 AGENT_SVC="sitemedic-agent"
 FRONTEND_SVC="sitemedic-frontend"
 DEMO_APP_SVC="sitemedic-demo-app"
@@ -136,8 +136,9 @@ echo "  Demo app: $DEMO_APP_URL (stable=$STABLE_REVISION, buggy=$BUGGY_REVISION)
 # ── 4. Build & deploy agent ────────────────────────────────────────────────
 echo "[4/7] Building agent…"
 if [ "$SKIP_BUILD" = "false" ]; then
-  gcloud builds submit "$ROOT/agent" \
-    --tag="${REGISTRY}/sitemedic-agent:latest" \
+  gcloud builds submit "$ROOT" \
+    --config="$ROOT/agent/cloudbuild.yaml" \
+    --substitutions="_REGISTRY=${REGISTRY}" \
     --project="$GCP_PROJECT_ID" --quiet
 fi
 
@@ -160,6 +161,16 @@ AGENT_ENV_VARS+=",DEMO_APP_STABLE_REVISION=${STABLE_REVISION}"
 AGENT_ENV_VARS+=",DEMO_APP_BUGGY_REVISION=${BUGGY_REVISION}"
 AGENT_ENV_VARS+=",SITEMEDIC_FORCE_DEMO=${FORCE_DEMO}"
 AGENT_ENV_VARS+=",DEMO_PUBLIC=${DEMO_PUBLIC}"
+
+# Resolve FRONTEND_URL: use existing deployed URL if skipping frontend, else use derived name
+if [ "$SKIP_FRONTEND" = "true" ]; then
+  _EXISTING_FRONTEND=$(gcloud run services describe "${FRONTEND_SVC}" \
+    --region="$GCP_REGION" --project="$GCP_PROJECT_ID" --format="value(status.url)" 2>/dev/null || true)
+  FRONTEND_URL="${_EXISTING_FRONTEND:-https://${FRONTEND_SVC}-${GCP_PROJECT_ID}.${GCP_REGION}.run.app}"
+else
+  FRONTEND_URL="https://${FRONTEND_SVC}-${GCP_PROJECT_ID}.${GCP_REGION}.run.app"
+fi
+AGENT_ENV_VARS+=",FRONTEND_URL=${FRONTEND_URL}"
 
 [ -n "$DT_TENANT_URL" ]    && AGENT_ENV_VARS+=",DT_TENANT_URL=${DT_TENANT_URL}"
 [ -n "$DT_MCP_SERVER_URL" ] && AGENT_ENV_VARS+=",DT_MCP_SERVER_URL=${DT_MCP_SERVER_URL}"
@@ -235,8 +246,8 @@ if [ "$SKIP_FRONTEND" = "false" ]; then
 
   if [ "$SKIP_BUILD" = "false" ]; then
     gcloud builds submit "$ROOT/frontend" \
-      --tag="${REGISTRY}/sitemedic-frontend:latest" \
-      --substitutions="_AGENT_URL=${AGENT_URL},_FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID},_FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN},_FIREBASE_API_KEY=${FIREBASE_API_KEY:-},_FIREBASE_APP_ID=${FIREBASE_APP_ID:-}" \
+      --config="$ROOT/frontend/cloudbuild.yaml" \
+      --substitutions="_REGION=${GCP_REGION},_AGENT_URL=${AGENT_URL},_FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID},_FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN},_FIREBASE_API_KEY=${FIREBASE_API_KEY:-},_FIREBASE_APP_ID=${FIREBASE_APP_ID:-}" \
       --project="$GCP_PROJECT_ID" --quiet
   fi
 

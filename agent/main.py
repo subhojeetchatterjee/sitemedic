@@ -200,7 +200,8 @@ else:
             "FRONTEND_URL environment variable must be set in staging/prod. "
             "Example: https://sitemedic-frontend-prod.run.app"
         )
-    cors_origins = [frontend_url]
+    # Accept comma-separated list so both URL formats can be allowed
+    cors_origins = [u.strip() for u in frontend_url.split(",") if u.strip()]
 
 logger.info(f"CORS origins: {cors_origins}")
 
@@ -848,6 +849,29 @@ async def get_demo_status():
     if status.get("scenarios_available", 0) == 0:
         status["scenarios_available"] = n_scenarios
     status["demo_public"] = _DEMO_PUBLIC
+
+    # Override active_scenarios with Firestore truth so the count stays
+    # accurate even after the in-memory scenario timer expires.
+    try:
+        from tools import firestore_client as _fsc
+        _ACTIVE_STATUSES = {"DETECTING", "DIAGNOSING", "AWAITING_APPROVAL", "REMEDIATING", "PREDICTIVE"}
+        _db = _fsc._get_db()
+        _active_docs = _db.collection("incidents").where("status", "in", list(_ACTIVE_STATUSES)).stream()
+        _active_list = list(_active_docs)
+        status["active_scenarios"] = len(_active_list)
+        if _active_list and not status.get("current_scenario"):
+            # Show the most-recently-started active incident name
+            _newest = sorted(
+                _active_list,
+                key=lambda d: d.to_dict().get("startedAt") or 0,
+                reverse=True,
+            )[0].to_dict()
+            _title = _newest.get("title", "")
+            # Strip "Demo: " prefix for brevity
+            status["current_scenario"] = _title.replace("Demo: ", "").strip() or None
+    except Exception:
+        pass  # fall back to in-memory values already set
+
     return status
 
 

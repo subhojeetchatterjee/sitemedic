@@ -1,10 +1,11 @@
 FROM python:3.11-slim
 
 # Install gcloud CLI for Cloud Run actions
-RUN apt-get update && apt-get install -y curl apt-transport-https gnupg && \
-    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+RUN apt-get update && apt-get install -y curl apt-transport-https ca-certificates gnupg && \
+    curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+      | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-        > /etc/apt/sources.list.d/google-cloud-sdk.list && \
+      > /etc/apt/sources.list.d/google-cloud-sdk.list && \
     apt-get update && apt-get install -y google-cloud-cli && \
     rm -rf /var/lib/apt/lists/*
 
@@ -14,10 +15,8 @@ WORKDIR /app
 COPY agent/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy agent source
+# Copy agent source and config
 COPY agent/ .
-
-# Copy environment config files (referenced at runtime as /config/environments/*.yaml)
 COPY config/ /config/
 
 ENV PORT=8080
