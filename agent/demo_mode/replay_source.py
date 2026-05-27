@@ -32,6 +32,11 @@ from sources.base import TelemetrySource, SourceMetadata
 logger = logging.getLogger(__name__)
 
 _SCENARIOS_DIR = Path(__file__).parent / "scenarios"
+_instance: "DemoModeSource | None" = None
+
+
+def get_demo_source() -> "DemoModeSource | None":
+    return _instance
 _INDEX_PATH = _SCENARIOS_DIR / "INDEX.json"
 _DEFAULT_SCHEDULE_INTERVAL_S = 480  # 8 minutes
 _FAKE_LATENCY_S = 0.05  # 50 ms simulated network latency
@@ -79,6 +84,8 @@ class DemoModeSource(TelemetrySource):
         speed: float = 1.0,
         auto_start_scheduler: bool = True,
     ) -> None:
+        global _instance
+        _instance = self
         self._scenarios_dir = scenarios_dir
         self._schedule_interval_s = schedule_interval_s
         self._speed = speed
@@ -316,6 +323,12 @@ class DemoModeSource(TelemetrySource):
         for active in self._active:
             if not active.resolved and active.should_resolve:
                 active.resolved = True
+
+    def resolve_by_problem_id(self, problem_id: str) -> None:
+        """Mark the scenario for this problem_id as resolved immediately."""
+        active = self._active_for_problem(problem_id)
+        if active is not None:
+            active.resolved = True
 
     def _first_active_scenario(self) -> ActiveScenario | None:
         """Return the first non-resolved active scenario."""

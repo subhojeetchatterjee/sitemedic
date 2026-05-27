@@ -112,6 +112,13 @@ async def set_postmortem(problem_id: str, text: str) -> None:
             rec.record_incident_event(problem_id, "postmortem", {"postmortem_length": len(text)})
     except Exception:
         pass
+    try:
+        from demo_mode.replay_source import get_demo_source
+        src = get_demo_source()
+        if src is not None:
+            src.resolve_by_problem_id(problem_id)
+    except Exception:
+        pass
 
 
 async def list_incidents(limit: int = 50) -> list[dict]:
