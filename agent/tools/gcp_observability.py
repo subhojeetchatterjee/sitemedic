@@ -20,6 +20,7 @@ from typing import Any
 from google.cloud import logging as gcloud_logging
 from google.cloud import monitoring_v3
 from google.cloud import trace_v1
+from google.protobuf.timestamp_pb2 import Timestamp as PbTimestamp
 
 _MAX_ENTRIES = 100
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB safety cap
@@ -141,8 +142,9 @@ async def query_cloud_monitoring(
                     or (val.distribution_value.mean if val.distribution_value else None)
                 )
                 points.append({
-                    "interval_end": point.interval.end_time.isoformat()
-                    if point.interval.end_time else None,
+                    "interval_end": datetime.fromtimestamp(
+                        point.interval.end_time.seconds, tz=timezone.utc
+                    ).isoformat() if point.interval.end_time else None,
                     "value": scalar,
                 })
             series_out.append({
@@ -184,10 +186,12 @@ async def list_recent_slow_traces(
         project_id = _project()
 
         since = datetime.now(timezone.utc) - timedelta(minutes=time_range_minutes)
+        since_pb = PbTimestamp()
+        since_pb.FromDatetime(since)
 
         request = trace_v1.ListTracesRequest(
             project_id=project_id,
-            start_time=since,
+            start_time=since_pb,
             filter=f"+{service_name}",
             page_size=_MAX_ENTRIES,
         )
@@ -219,8 +223,8 @@ async def list_recent_slow_traces(
                         {
                             "span_id": s.span_id,
                             "name": s.name,
-                            "start_time": s.start_time.isoformat() if s.start_time else None,
-                            "end_time": s.end_time.isoformat() if s.end_time else None,
+                            "start_time": datetime.fromtimestamp(s.start_time.seconds, tz=timezone.utc).isoformat() if s.start_time else None,
+                            "end_time": datetime.fromtimestamp(s.end_time.seconds, tz=timezone.utc).isoformat() if s.end_time else None,
                             "labels": dict(s.labels) if s.labels else {},
                         }
                         for s in trace.spans[:20]  # cap spans per trace
@@ -262,8 +266,8 @@ async def get_cloud_trace_spans(trace_id: str) -> dict:
                     "span_id": s.span_id,
                     "parent_span_id": s.parent_span_id,
                     "name": s.name,
-                    "start_time": s.start_time.isoformat() if s.start_time else None,
-                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "start_time": datetime.fromtimestamp(s.start_time.seconds, tz=timezone.utc).isoformat() if s.start_time else None,
+                    "end_time": datetime.fromtimestamp(s.end_time.seconds, tz=timezone.utc).isoformat() if s.end_time else None,
                     "labels": dict(s.labels) if s.labels else {},
                 }
                 for s in trace.spans[:_MAX_ENTRIES]
