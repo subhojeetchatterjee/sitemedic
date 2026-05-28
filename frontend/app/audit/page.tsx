@@ -4,10 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { AuditEvent } from "@/lib/types";
 import Link from "next/link";
 
-const AGENT_URL =
-  process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
-const API_KEY =
-  process.env.NEXT_PUBLIC_AGENT_API_KEY ?? "";
 
 // ── Colour coding ─────────────────────────────────────────────────────────
 
@@ -214,7 +210,7 @@ export default function AuditPage() {
   async function runVerify() {
     setVerifying(true);
     try {
-      const res = await fetch(`${AGENT_URL}/api/audit/verify`);
+      const res = await fetch("/api/audit/verify");
       const data: ChainStatus = await res.json();
       setChainStatus(data);
     } catch {
@@ -227,7 +223,7 @@ export default function AuditPage() {
   function exportData(fmt: "json" | "csv") {
     const params = new URLSearchParams({ fmt, limit: "1000" });
     if (filterIncident) params.set("incident_id", filterIncident);
-    window.open(`${AGENT_URL}/api/audit/export?${params.toString()}`, "_blank");
+    window.open(`/api/audit/export?${params.toString()}`, "_blank");
   }
 
   return (

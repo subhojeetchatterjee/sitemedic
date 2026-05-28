@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
-const API_KEY   = process.env.NEXT_PUBLIC_AGENT_API_KEY ?? "";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -56,12 +54,9 @@ function ServiceRow({
         body.revenue_per_request_usd = null;
       }
 
-      const res = await fetch(`${AGENT_URL}/api/cost-settings/${service}`, {
+      const res = await fetch(`/api/cost-settings/${service}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": API_KEY,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 

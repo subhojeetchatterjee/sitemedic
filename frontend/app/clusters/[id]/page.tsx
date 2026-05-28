@@ -83,8 +83,6 @@ function MemberCard({ incident }: { incident: Incident }) {
   );
 }
 
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
-const AGENT_KEY = process.env.NEXT_PUBLIC_AGENT_API_KEY ?? "";
 
 export default function ClusterPage({ params }: { params: { id: string } }) {
   const [cluster, setCluster] = useState<IncidentCluster | null>(null);
@@ -111,9 +109,9 @@ export default function ClusterPage({ params }: { params: { id: string } }) {
     setApproving(true);
     setApproveError(null);
     try {
-      const res = await fetch(`${AGENT_URL}/api/clusters/${cluster!.cluster_id}/approve`, {
+      const res = await fetch(`/api/clusters/${cluster!.cluster_id}/approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": AGENT_KEY },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode, rejected }),
       });
       if (!res.ok) {
