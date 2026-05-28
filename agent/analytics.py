@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-SNAPSHOT_TTL_SECONDS = 3600  # 1 hour
+SNAPSHOT_TTL_SECONDS = 300  # 5 minutes
 
 
 # ── Timestamp normalisation ────────────────────────────────────────────────
