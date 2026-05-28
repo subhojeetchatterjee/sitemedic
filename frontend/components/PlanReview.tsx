@@ -202,12 +202,11 @@ export default function PlanReview({
   async function submit(approved: boolean) {
     setExecuting(true);
     await fetch(
-      `${process.env.NEXT_PUBLIC_AGENT_URL}/api/incidents/${problemId}/approve`,
+      `/api/incidents/${problemId}/approve`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": process.env.NEXT_PUBLIC_AGENT_API_KEY ?? "",
         },
         body: JSON.stringify({
           approved,
