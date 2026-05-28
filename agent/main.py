@@ -83,7 +83,7 @@ def _require_api_key(key: Optional[str] = Security(API_KEY_HEADER)):
                 status_code=500,
                 detail="Agent API key not configured. Set AGENT_API_KEY env var or configure Secret Manager."
             )
-    if key != agent_api_key:
+    if key.strip() != agent_api_key.strip():
         raise HTTPException(status_code=403, detail="Invalid API key")
     return key
 

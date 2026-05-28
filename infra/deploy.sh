@@ -70,10 +70,10 @@ _upsert_secret() {
     return
   fi
   if gcloud secrets describe "$name" --project="$GCP_PROJECT_ID" &>/dev/null; then
-    echo "$value" | gcloud secrets versions add "$name" --data-file=- \
+    printf '%s' "$value" | gcloud secrets versions add "$name" --data-file=- \
       --project="$GCP_PROJECT_ID" --quiet
   else
-    echo "$value" | gcloud secrets create "$name" --data-file=- \
+    printf '%s' "$value" | gcloud secrets create "$name" --data-file=- \
       --project="$GCP_PROJECT_ID" --replication-policy=automatic --quiet
   fi
   echo "  OK: $name"
@@ -262,6 +262,7 @@ if [ "$SKIP_FRONTEND" = "false" ]; then
     --max-instances=5 \
     --memory=512Mi \
     --set-env-vars="AGENT_URL=${AGENT_URL},NODE_ENV=production" \
+    --set-secrets="AGENT_API_KEY=sitemedic-agent-api-key:latest" \
     --project="$GCP_PROJECT_ID" --quiet
 
   FRONTEND_URL=$(gcloud run services describe "$FRONTEND_SVC" \
