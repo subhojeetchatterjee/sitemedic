@@ -442,12 +442,12 @@ def _now_pb_timestamp():
 
 # ── Dispatch ───────────────────────────────────────────────────────────────
 
-async def execute_remediation(plan: dict) -> dict:
+async def execute_remediation(plan: dict, simulate: bool = False) -> dict:
     """
     Dispatch to the correct action based on plan["action"].
     Destructive actions must have already been validated by main.py before this is called.
     """
-    if _is_demo_mode():
+    if _is_demo_mode() or simulate:
         return _simulate_remediation(plan)
 
     action = plan.get("action")

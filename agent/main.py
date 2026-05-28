@@ -304,7 +304,7 @@ async def approve_incident(problem_id: str, decision: ApprovalDecision):
 
         await firestore_client.set_status(problem_id, "REMEDIATING")
         try:
-            result = await gcp_actions.execute_remediation(plan)
+            result = await gcp_actions.execute_remediation(plan, simulate=problem_id.startswith("P-DEMO-"))
             await firestore_client.append_trace(problem_id, {
                 "step": 999,
                 "thought": f"Human approved. Executing: {plan['action']}",
