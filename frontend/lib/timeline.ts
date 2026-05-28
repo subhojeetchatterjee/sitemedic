@@ -416,11 +416,13 @@ export function applyFilter(events: TLEvent[], mode: FilterMode): TLEvent[] {
 // ── Duration helpers ──────────────────────────────────────────────────────
 
 export function incidentDuration(incident: Incident): string {
-  const start = new Date(incident.started_at).getTime();
+  const startMs = incident.started_at ? new Date(incident.started_at).getTime() : NaN;
+  if (isNaN(startMs)) return "—";
   const end   = incident.status === "RESOLVED" || incident.status === "REJECTED"
     ? new Date(incident.updated_at).getTime()
     : Date.now();
-  const secs = Math.floor((end - start) / 1000);
+  const secs = Math.floor((end - startMs) / 1000);
+  if (secs < 0 || isNaN(secs)) return "—";
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m ${secs % 60}s`;

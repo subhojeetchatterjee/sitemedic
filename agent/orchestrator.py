@@ -423,6 +423,9 @@ async def _dispatch_tool(name: str, args: dict, problem_id: str = "") -> tuple[A
         return await gcp_actions.query_subscription_backlog(**args), "gcp"
     elif name == "query_bucket_anomalies":
         return await gcp_actions.query_bucket_anomalies(**args), "gcp"
+    # ── Action tools called prematurely during diagnosis ───────────────────
+    elif name in ("rollback_revision", "restart_service", "scale_service", "no_action_needed"):
+        return {"error": f"Tool '{name}' is only available after human approval. Use the remediation plan JSON output to propose this action."}, "agent"
     else:
         raise ValueError(f"Unknown tool: {name}")
 

@@ -192,7 +192,7 @@ async def list_recent_slow_traces(
         request = trace_v1.ListTracesRequest(
             project_id=project_id,
             start_time=since_pb,
-            filter=f"+{service_name}",
+            filter=f"span:{service_name}",
             page_size=_MAX_ENTRIES,
         )
 
