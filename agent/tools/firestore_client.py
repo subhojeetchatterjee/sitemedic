@@ -184,10 +184,22 @@ async def validate_prediction(prediction_id: str, incident_id: str) -> None:
 
 async def mark_prediction_false_positive(prediction_id: str) -> None:
     """Tag a prediction as a false positive once its window expires without a breach."""
-    await _predictions().document(prediction_id).update({
+    now = datetime.now(timezone.utc)
+    pred_ref = _predictions().document(prediction_id)
+    await pred_ref.update({
         "prediction_false_positive": True,
-        "updated_at": datetime.now(timezone.utc),
+        "updated_at": now,
     })
+    # Close any linked PREDICTIVE incident so it stops showing in the Forecasted tab
+    pred_snap = await pred_ref.get()
+    if pred_snap.exists:
+        pred_data = pred_snap.to_dict() or {}
+        linked_id = pred_data.get("materialized_incident_id")
+        if linked_id:
+            inc_ref = _incidents().document(linked_id)
+            inc_snap = await inc_ref.get()
+            if inc_snap.exists and (inc_snap.to_dict() or {}).get("status") == "PREDICTIVE":
+                await inc_ref.update({"status": "REJECTED", "updated_at": now})
 
 
 async def list_expired_untagged_predictions() -> list[dict]:
