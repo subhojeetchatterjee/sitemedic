@@ -425,7 +425,11 @@ async def execute_cluster(cluster_id: str, mode: str = "all_at_once") -> None:
                     "estimated_impact": f"Cluster step {step_idx}: {step['action']} on {step['service']}",
                 }
 
-            result = await gcp_actions.execute_remediation(plan_dict)
+            is_demo = any(
+                iid.startswith("P-DEMO-")
+                for iid in cluster.get("member_incident_ids", [])
+            )
+            result = await gcp_actions.execute_remediation(plan_dict, simulate=is_demo)
             await firestore_client.update_cluster_step(cluster_id, step_idx, "done", result)
             logger.info(
                 f"Cluster {cluster_id} step {step_idx} done: "

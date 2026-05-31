@@ -17,9 +17,5 @@ export function agentUrl(): string {
 }
 
 export function agentApiKey(): string {
-  return (
-    process.env.AGENT_API_KEY ||
-    process.env.NEXT_PUBLIC_AGENT_API_KEY ||
-    ""
-  );
+  return process.env.AGENT_API_KEY || "";
 }

@@ -158,6 +158,7 @@ export default function PlanReview({
   const [confirmationInput, setConfirmationInput] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<"primary" | "alternative">("primary");
   const [alwaysDryRun, setAlwaysDryRun] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const activePlan = selectedPlan === "alternative" && plan.cost_optimized_alternative
     ? plan.cost_optimized_alternative
@@ -201,24 +202,35 @@ export default function PlanReview({
 
   async function submit(approved: boolean) {
     setExecuting(true);
-    await fetch(
-      `/api/incidents/${problemId}/approve`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    setSubmitError(null);
+    try {
+      const res = await fetch(
+        `/api/incidents/${problemId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approved,
+            rejected_reason: rejectReason || null,
+            explicit_confirmation: isDestructive ? confirmationInput.trim() : null,
+            selected_plan: selectedPlan,
+            dry_run: false,
+          }),
         },
-        body: JSON.stringify({
-          approved,
-          rejected_reason: rejectReason || null,
-          explicit_confirmation: isDestructive ? confirmationInput.trim() : null,
-          selected_plan: selectedPlan,
-          dry_run: false,
-        }),
-      },
-    );
-    setExecuting(false);
-    onDecision(approved);
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSubmitError((err as { detail?: string }).detail || `Request failed (${res.status})`);
+        return;
+      }
+      onDecision(approved);
+    } catch (e) {
+      setSubmitError(String(e));
+    } finally {
+      setExecuting(false);
+    }
   }
 
   // ── Step 1: Review plan ─────────────────────────────────────────────────
@@ -426,6 +438,9 @@ export default function PlanReview({
           </button>
         </div>
       </div>
+      {submitError && (
+        <p className="mt-2 text-sm text-red-400 text-center">{submitError}</p>
+      )}
     </div>
   );
 }

@@ -190,16 +190,17 @@ async def mark_prediction_false_positive(prediction_id: str) -> None:
         "prediction_false_positive": True,
         "updated_at": now,
     })
-    # Close any linked PREDICTIVE incident so it stops showing in the Forecasted tab
-    pred_snap = await pred_ref.get()
-    if pred_snap.exists:
-        pred_data = pred_snap.to_dict() or {}
-        linked_id = pred_data.get("materialized_incident_id")
-        if linked_id:
-            inc_ref = _incidents().document(linked_id)
-            inc_snap = await inc_ref.get()
-            if inc_snap.exists and (inc_snap.to_dict() or {}).get("status") == "PREDICTIVE":
-                await inc_ref.update({"status": "REJECTED", "updated_at": now})
+    # Close any PREDICTIVE incident that was opened for this prediction.
+    # _open_predictive_incident writes linked_prediction_id on the incident but NOT
+    # materialized_incident_id on the prediction, so we query by the incident field.
+    inc_query = (
+        _incidents()
+        .where("linked_prediction_id", "==", prediction_id)
+        .where("status", "==", "PREDICTIVE")
+        .limit(5)
+    )
+    async for inc_doc in inc_query.stream():
+        await inc_doc.reference.update({"status": "REJECTED", "updated_at": now})
 
 
 async def list_expired_untagged_predictions() -> list[dict]:
