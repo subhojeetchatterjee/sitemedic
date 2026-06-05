@@ -1,6 +1,6 @@
 # SiteMedic — Autonomous SRE Agent
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-sitemedic-blue?style=for-the-badge&logo=googlecloud)](https://sitemedic-frontend-427842119053.us-central1.run.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-sitemedic-blue?style=for-the-badge&logo=googlecloud)](https://sitemedic-frontend-aan4dxgk4q-uc.a.run.app)
 
 SiteMedic is an autonomous Site Reliability Engineering agent that detects production incidents, diagnoses root causes using Gemini 2.5 Pro's ReAct reasoning loop, proposes a remediation plan for human approval, executes the fix on Google Cloud Run, and generates a postmortem — all in real time.
 
