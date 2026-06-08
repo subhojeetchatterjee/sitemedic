@@ -134,7 +134,7 @@ _DIAGNOSIS_PLAN_SCHEMA = {
     },
     "required": ["diagnosis", "plan"],
 }
-MAX_REACT_STEPS = 10
+MAX_REACT_STEPS = 6
 DIAGNOSE_MODEL = "gemini-2.5-pro"
 DETECT_MODEL = "gemini-2.5-flash"
 

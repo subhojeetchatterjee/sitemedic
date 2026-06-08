@@ -1,14 +1,14 @@
 """
 Predictive SLO breach forecasting.
 
-predictive_loop() runs every 5 minutes:
-  1. Discover up to MAX_SERVICES_PER_CYCLE monitored services
-  2. Fetch the last 30 minutes of key metrics (error rate, p99 latency, memory)
-     from Dynatrace MCP and GCP Monitoring
-  3. Send the time-series snapshot to Gemini 2.5 Pro for trend analysis
-  4. Persist predictions (confidence >= 0.70) to Firestore `predictions` collection
-  5. Auto-open PREDICTIVE incidents for high-confidence predictions (>= 0.85)
-  6. Expire false-positive predictions from the previous cycle
+predictive_loop() runs every 15 minutes:
+1. Discover up to MAX_SERVICES_PER_CYCLE monitored services
+2. Fetch the last 30 minutes of key metrics (error rate, p99 latency, memory)
+from Dynatrace MCP and GCP Monitoring
+3. Send the time-series snapshot to Gemini 2.5 Flash for trend analysis
+4. Persist predictions (confidence >= 0.70) to Firestore `predictions` collection
+5. Auto-open PREDICTIVE incidents for high-confidence predictions (>= 0.85)
+6. Expire false-positive predictions from the previous cycle
 """
 from __future__ import annotations
 
@@ -26,13 +26,15 @@ from vertexai.generative_models import Content, GenerationConfig, GenerativeMode
 from schemas import Prediction, RemediationAction
 from tools import dynatrace_mcp, firestore_client, gcp_observability
 from environment import Environment
+from audit import AuditEvent, ActionType, log_audit_event, _agent_id
+from orchestrator import init_vertex
 
 logger = logging.getLogger(__name__)
 
 env = Environment.get_instance()
 
-PREDICT_MODEL = "gemini-2.5-pro"
-PREDICT_INTERVAL_SECONDS = env.get("prediction.interval_seconds", 300)  # 5 minutes default
+PREDICT_MODEL = "gemini-2.5-flash"
+PREDICT_INTERVAL_SECONDS = env.get("prediction.interval_seconds", 900)
 MAX_SERVICES_PER_CYCLE = 4
 PREDICTION_TTL_MINUTES = env.get("prediction.ttl_minutes", 30)
 MIN_CONFIDENCE_TO_STORE = 0.70
@@ -138,7 +140,7 @@ async def _collect_metrics_for_service(service: str) -> dict:
 
 async def _run_prediction(all_metrics: list[dict]) -> list[dict]:
     """
-    Send all services' metrics to Gemini 2.5 Pro for trend analysis.
+    Send all services' metrics to Gemini 2.5 Flash for trend analysis.
     Returns a list of raw prediction dicts from Gemini.
     """
     system_prompt = _read_prompt("predict.txt")
@@ -155,7 +157,7 @@ async def _run_prediction(all_metrics: list[dict]) -> list[dict]:
     )
     generation_config = GenerationConfig(
         response_mime_type="application/json",
-        temperature=0.2,    # low temperature for numerical extrapolation
+        temperature=0.2,
     )
 
     def _sync_call():
@@ -189,17 +191,13 @@ def _safe_action(raw: str | None) -> RemediationAction | None:
         return None
 
 
-async def _persist_prediction(raw: dict, raw_metrics: dict) -> str | None:
+async def _persist_prediction(raw: dict, raw_metrics: dict, service: str) -> str | None:
     """
     Validate and store one prediction. Returns the prediction_id or None if skipped.
     """
     try:
         confidence = float(raw.get("confidence", 0))
         if confidence < MIN_CONFIDENCE_TO_STORE:
-            return None
-
-        service = raw.get("service", "").strip()
-        if not service:
             return None
 
         breach_minutes = int(raw.get("predicted_breach_in_minutes", 10))
@@ -225,6 +223,19 @@ async def _persist_prediction(raw: dict, raw_metrics: dict) -> str | None:
         }
         await firestore_client.create_prediction(data)
         logger.info(f"Prediction stored: {prediction_id} service={service} confidence={confidence:.2f}")
+        log_audit_event(AuditEvent(
+            actor="agent",
+            actor_identity=_agent_id(),
+            action_type=ActionType.PREDICTION_STORED,
+            incident_id=None,
+            resource=f"predictions/{prediction_id}",
+            payload={
+                "service": service,
+                "confidence": confidence,
+                "predicted_breach_in_minutes": breach_minutes,
+            },
+            result="success",
+        ))
         return prediction_id
     except Exception as exc:
         logger.warning(f"Failed to persist prediction: {exc}")
@@ -310,26 +321,38 @@ async def _sweep_expired_predictions() -> None:
 
 async def predictive_loop() -> None:
     """
-    Runs every PREDICT_INTERVAL_SECONDS (5 min).
+    Runs every PREDICT_INTERVAL_SECONDS (15 min).
     Discovers services → collects metrics → asks Gemini → persists predictions.
     """
+    init_vertex()
     logger.info("Predictive loop started")
 
     while True:
         try:
-            # 1. Expire old predictions first
             await _sweep_expired_predictions()
 
-            # 2. Discover services to analyse
             services = await _discover_services()
             if not services:
                 logger.debug("No services to analyse; skipping prediction cycle")
+                log_audit_event(AuditEvent(
+                    actor="agent",
+                    actor_identity=_agent_id(),
+                    action_type=ActionType.PREDICTION_CYCLE,
+                    payload={"services_analysed": 0, "reason": "no_services"},
+                    result="success",
+                ))
                 await asyncio.sleep(PREDICT_INTERVAL_SECONDS)
                 continue
 
             logger.info(f"Prediction cycle: analysing {services}")
+            log_audit_event(AuditEvent(
+                actor="agent",
+                actor_identity=_agent_id(),
+                action_type=ActionType.PREDICTION_CYCLE,
+                payload={"services_analysed": len(services), "services": services},
+                result="success",
+            ))
 
-            # 3. Collect metrics for all services in parallel
             metric_snapshots = await asyncio.gather(
                 *[_collect_metrics_for_service(svc) for svc in services],
                 return_exceptions=True,
@@ -339,28 +362,64 @@ async def predictive_loop() -> None:
             ]
 
             if not valid_snapshots:
+                log_audit_event(AuditEvent(
+                    actor="agent",
+                    actor_identity=_agent_id(),
+                    action_type=ActionType.PREDICTION_CYCLE,
+                    payload={"services_analysed": len(services), "reason": "no_valid_metrics"},
+                    result="partial",
+                ))
                 await asyncio.sleep(PREDICT_INTERVAL_SECONDS)
                 continue
 
-            # 4. Run Gemini prediction
             raw_predictions = await _run_prediction(valid_snapshots)
 
-            # Build a quick lookup: service → its metric snapshot
+            if not raw_predictions:
+                log_audit_event(AuditEvent(
+                    actor="agent",
+                    actor_identity=_agent_id(),
+                    action_type=ActionType.PREDICTION_GEMINI_CALL,
+                    payload={"services_analysed": len(services), "predictions_count": 0},
+                    result="success",
+                ))
+
             metrics_by_service = {m["service"]: m for m in valid_snapshots}
 
-            # 5. Persist qualifying predictions and open incidents
+            stored_count = 0
+            incident_count = 0
             for raw in raw_predictions:
                 service = raw.get("service", "")
                 raw_metrics = metrics_by_service.get(service, {})
-                prediction_id = await _persist_prediction(raw, raw_metrics)
+                prediction_id = await _persist_prediction(raw, raw_metrics, service)
                 if prediction_id is None:
                     continue
+                stored_count += 1
 
                 confidence = float(raw.get("confidence", 0))
                 if confidence >= MIN_CONFIDENCE_TO_INCIDENT:
                     await _open_predictive_incident(raw, prediction_id, raw_metrics)
+                    incident_count += 1
+
+            log_audit_event(AuditEvent(
+                actor="agent",
+                actor_identity=_agent_id(),
+                action_type=ActionType.PREDICTION_CYCLE,
+                payload={
+                    "services_analysed": len(services),
+                    "predictions_stored": stored_count,
+                    "incidents_opened": incident_count,
+                },
+                result="success",
+            ))
 
         except Exception:
             logger.exception("Predictive loop error")
+            log_audit_event(AuditEvent(
+                actor="agent",
+                actor_identity=_agent_id(),
+                action_type=ActionType.PREDICTION_CYCLE,
+                payload={"error": "prediction loop exception"},
+                result="failure",
+            ))
 
         await asyncio.sleep(PREDICT_INTERVAL_SECONDS)
