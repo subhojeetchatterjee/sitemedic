@@ -98,7 +98,7 @@ gcloud run deploy "$DEMO_APP_SVC" \
   --allow-unauthenticated \
   --port=3000 \
   --tag=v1-stable \
-  --min-instances=1 \
+  --min-instances=0 \
   --max-instances=3 \
   --set-env-vars="OTEL_SERVICE_NAME=sitemedic-demo-app" \
   --project="$GCP_PROJECT_ID" --quiet
@@ -191,10 +191,10 @@ gcloud run deploy "$AGENT_SVC" \
   --platform=managed \
   --no-allow-unauthenticated \
   --port=8080 \
-  --min-instances=1 \
+  --min-instances=0 \
   --max-instances=5 \
-  --memory=2Gi \
-  --cpu=2 \
+  --memory=1Gi \
+  --cpu=1 \
   --set-env-vars="$AGENT_ENV_VARS" \
   --set-secrets="$AGENT_SECRETS" \
   --service-account="sitemedic-agent@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
@@ -258,7 +258,7 @@ if [ "$SKIP_FRONTEND" = "false" ]; then
     --platform=managed \
     --allow-unauthenticated \
     --port=3000 \
-    --min-instances=1 \
+    --min-instances=0 \
     --max-instances=5 \
     --memory=512Mi \
     --set-env-vars="AGENT_URL=${AGENT_URL},NODE_ENV=production" \
